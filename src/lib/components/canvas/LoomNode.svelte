@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { LoomNodeData } from '$lib/types/node.js';
 	import NodeToolbar from './NodeToolbar.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
@@ -12,6 +13,11 @@
 	let { id, data }: Props = $props();
 	let hovered = $state(false);
 	let errorMessage = $state<string | null>(null);
+
+	let textareaEl: HTMLTextAreaElement;
+	let highlightEl: HTMLDivElement;
+
+	let hasHighlight = $derived(data.generatedTextStart > 0 && data.generatedTextStart < data.text.length);
 
 	function handleGenerate() {
 		errorMessage = null;
@@ -32,7 +38,22 @@
 	function handleTextInput(e: Event) {
 		const textarea = e.target as HTMLTextAreaElement;
 		graphStore.updateText(id, textarea.value);
+		syncScroll();
 	}
+
+	function syncScroll() {
+		if (highlightEl && textareaEl) {
+			highlightEl.scrollTop = textareaEl.scrollTop;
+		}
+	}
+
+	// Scroll textarea to bottom on mount so new generated text is visible
+	onMount(() => {
+		if (textareaEl && data.text.length > 0) {
+			textareaEl.scrollTop = textareaEl.scrollHeight;
+			syncScroll();
+		}
+	});
 
 	let showToolbar = $derived(hovered || data.isGenerating);
 </script>
@@ -69,13 +90,30 @@
 			</div>
 		{/if}
 
-		<textarea
-			class="w-full resize-none rounded bg-zinc-800 p-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-			rows="5"
-			placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
-			value={data.text}
-			oninput={handleTextInput}
-		></textarea>
+		<div class="relative">
+			<!-- Highlight layer (behind textarea) — mirrors text layout, only background visible -->
+			{#if hasHighlight}
+				<div
+					bind:this={highlightEl}
+					class="absolute inset-0 rounded p-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
+					style="color: transparent; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
+					aria-hidden="true"
+				><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
+			{/if}
+
+			<textarea
+				bind:this={textareaEl}
+				class="relative w-full resize-none rounded p-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+				class:bg-zinc-800={!hasHighlight}
+				class:bg-transparent={hasHighlight}
+				style="line-height: 1.5;"
+				rows="5"
+				placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
+				value={data.text}
+				oninput={handleTextInput}
+				onscroll={syncScroll}
+			></textarea>
+		</div>
 
 		{#if errorMessage}
 			<div class="mt-1 text-xs text-red-400 truncate" title={errorMessage}>

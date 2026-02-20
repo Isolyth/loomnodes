@@ -31,7 +31,7 @@ function createGenerationStore() {
 				activeRequests++;
 				try {
 					const text = await fetchCompletion(prompt, settings);
-					graphStore.addChild(nodeId, prompt + text, index);
+					graphStore.addChild(nodeId, prompt + text, prompt.length);
 				} catch (err) {
 					const message =
 						err instanceof CompletionServiceError
@@ -40,7 +40,7 @@ function createGenerationStore() {
 								? err.message
 								: 'Unknown error';
 					errors.push(message);
-					graphStore.addChild(nodeId, `[Error: ${message}]`, index);
+					graphStore.addChild(nodeId, `[Error: ${message}]`, 0);
 				} finally {
 					activeRequests--;
 				}

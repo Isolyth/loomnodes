@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { forceSimulation, forceLink, forceManyBody, forceX, forceY } from 'd3-force';
+	import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
 	import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 	import LoomNode from './LoomNode.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
@@ -76,6 +76,7 @@
 					.strength(s.forceLinkStrength)
 			)
 			.force('charge', forceManyBody().strength(-s.forceRepulsion))
+			.force('collide', forceCollide(160).strength(0.8))
 			.force('x', forceX(0).strength(s.forceCenterStrength))
 			.force('y', forceY(0).strength(s.forceCenterStrength))
 			.alphaDecay(s.forceAlphaDecay)
@@ -109,6 +110,10 @@
 			const chargeForce = sim.force('charge') as ReturnType<typeof forceManyBody> | undefined;
 			if (chargeForce) {
 				chargeForce.strength(-s.forceRepulsion);
+			}
+			const collideForce = sim.force('collide') as ReturnType<typeof forceCollide> | undefined;
+			if (collideForce) {
+				collideForce.strength(0.8);
 			}
 			const xForce = sim.force('x') as ReturnType<typeof forceX> | undefined;
 			if (xForce) {

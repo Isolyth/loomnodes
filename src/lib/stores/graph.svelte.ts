@@ -37,7 +37,8 @@ function createGraphStore() {
 				parentId: null,
 				childIds: [],
 				isRoot: true,
-				isGenerating: false
+				isGenerating: false,
+				generatedTextStart: 0
 			},
 			width: NODE_WIDTH,
 			height: NODE_HEIGHT
@@ -66,7 +67,7 @@ function createGraphStore() {
 		saveGraph({ nodes, edges });
 	}
 
-	function addChild(parentId: string, text: string, index: number = 0): string {
+	function addChild(parentId: string, text: string, generatedTextStart: number = 0): string {
 		const parent = nodes.find((n) => n.id === parentId);
 		if (!parent) return '';
 
@@ -82,7 +83,8 @@ function createGraphStore() {
 				parentId,
 				childIds: [],
 				isRoot: false,
-				isGenerating: false
+				isGenerating: false,
+				generatedTextStart
 			},
 			width: NODE_WIDTH,
 			height: NODE_HEIGHT

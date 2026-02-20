@@ -5,4 +5,5 @@ export interface LoomNodeData {
 	childIds: string[];
 	isRoot: boolean;
 	isGenerating: boolean;
+	generatedTextStart: number; // char index where generated text begins (0 = none)
 }
