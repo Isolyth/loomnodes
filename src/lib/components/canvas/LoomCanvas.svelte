@@ -6,8 +6,8 @@
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 
-	const NODE_W = 280;
-	const NODE_H = 160;
+	const NODE_W = 340;
+	const NODE_H = 200;
 
 	// ---- Simulation types ----
 	interface SimNode extends SimulationNodeDatum {
@@ -76,7 +76,7 @@
 					.strength(s.forceLinkStrength)
 			)
 			.force('charge', forceManyBody().strength(-s.forceRepulsion))
-			.force('collide', forceCollide(160).strength(0.8))
+			.force('collide', forceCollide(190).strength(0.8))
 			.force('x', forceX(0).strength(s.forceCenterStrength))
 			.force('y', forceY(0).strength(s.forceCenterStrength))
 			.alphaDecay(s.forceAlphaDecay)

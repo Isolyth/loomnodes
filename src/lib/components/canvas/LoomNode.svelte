@@ -47,7 +47,6 @@
 		}
 	}
 
-	// Scroll textarea to bottom on mount so new generated text is visible
 	onMount(() => {
 		if (textareaEl && data.text.length > 0) {
 			textareaEl.scrollTop = textareaEl.scrollHeight;
@@ -60,65 +59,71 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="rounded-lg border bg-zinc-900 shadow-xl transition-shadow hover:shadow-2xl"
-	class:border-indigo-500={data.isRoot}
-	class:border-zinc-700={!data.isRoot}
-	class:border-amber-500={data.isGenerating}
-	style="width: 280px;"
+	class="relative pt-9"
 	onmouseenter={() => (hovered = true)}
 	onmouseleave={() => (hovered = false)}
 >
-	<!-- Toolbar -->
+	<!-- Floating icon toolbar — top-right, above the card -->
 	<div
-		class="flex justify-center p-1.5 border-b border-zinc-700/50 transition-opacity"
+		class="absolute top-0 right-0 z-10 transition-opacity"
 		class:opacity-0={!showToolbar}
 		class:pointer-events-none={!showToolbar}
 	>
-		<NodeToolbar
-			isRoot={data.isRoot}
-			isGenerating={data.isGenerating}
-			ongenerate={handleGenerate}
-			oncopy={handleCopy}
-			ondelete={handleDelete}
-		/>
+		<div class="flex items-center rounded-md bg-zinc-800/90 backdrop-blur-sm shadow-lg border border-zinc-700">
+			<NodeToolbar
+				isRoot={data.isRoot}
+				isGenerating={data.isGenerating}
+				ongenerate={handleGenerate}
+				oncopy={handleCopy}
+				ondelete={handleDelete}
+			/>
+		</div>
 	</div>
 
-	<div class="p-2">
-		{#if data.isRoot}
-			<div class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
-				Root
-			</div>
-		{/if}
-
-		<div class="relative">
-			<!-- Highlight layer (behind textarea) — mirrors text layout, only background visible -->
-			{#if hasHighlight}
-				<div
-					bind:this={highlightEl}
-					class="absolute inset-0 rounded p-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
-					style="color: transparent; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
-					aria-hidden="true"
-				><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
+	<!-- Card -->
+	<div
+		class="rounded-lg border bg-zinc-900 shadow-xl transition-shadow hover:shadow-2xl"
+		class:border-indigo-500={data.isRoot}
+		class:border-zinc-700={!data.isRoot}
+		class:border-amber-500={data.isGenerating}
+		style="width: 340px;"
+	>
+		<div class="p-3">
+			{#if data.isRoot}
+				<div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
+					Root
+				</div>
 			{/if}
 
-			<textarea
-				bind:this={textareaEl}
-				class="relative w-full resize-none rounded p-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-				class:bg-zinc-800={!hasHighlight}
-				class:bg-transparent={hasHighlight}
-				style="line-height: 1.5;"
-				rows="5"
-				placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
-				value={data.text}
-				oninput={handleTextInput}
-				onscroll={syncScroll}
-			></textarea>
-		</div>
+			<div class="relative">
+				{#if hasHighlight}
+					<div
+						bind:this={highlightEl}
+						class="absolute inset-0 rounded p-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
+						style="color: transparent; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
+						aria-hidden="true"
+					><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
+				{/if}
 
-		{#if errorMessage}
-			<div class="mt-1 text-xs text-red-400 truncate" title={errorMessage}>
-				{errorMessage}
+				<textarea
+					bind:this={textareaEl}
+					class="relative w-full resize-none rounded p-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+					class:bg-zinc-800={!hasHighlight}
+					class:bg-transparent={hasHighlight}
+					style="line-height: 1.5;"
+					rows="7"
+					placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
+					value={data.text}
+					oninput={handleTextInput}
+					onscroll={syncScroll}
+				></textarea>
 			</div>
-		{/if}
+
+			{#if errorMessage}
+				<div class="mt-1 text-xs text-red-400 truncate" title={errorMessage}>
+					{errorMessage}
+				</div>
+			{/if}
+		</div>
 	</div>
 </div>
