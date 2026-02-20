@@ -130,6 +130,9 @@
 
 	// ---- Zoom (wheel) ----
 	function onWheel(e: WheelEvent) {
+		const t = e.target as HTMLElement;
+		if (t.closest('textarea, input, select')) return;
+
 		e.preventDefault();
 		const rect = container.getBoundingClientRect();
 		const mx = e.clientX - rect.left;

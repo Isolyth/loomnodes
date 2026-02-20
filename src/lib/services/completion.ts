@@ -1,4 +1,4 @@
-import type { CompletionRequest, CompletionResponse, CompletionError } from '$lib/types/api.js';
+import type { CompletionError } from '$lib/types/api.js';
 import type { LoomSettings } from '$lib/types/settings.js';
 
 export class CompletionServiceError extends Error {
@@ -16,7 +16,9 @@ export async function fetchCompletion(
 	prompt: string,
 	settings: LoomSettings
 ): Promise<string> {
-	const body: CompletionRequest = {
+	const body = {
+		apiBaseUrl: settings.apiBaseUrl,
+		apiKey: settings.apiKey,
 		model: settings.model,
 		prompt,
 		max_tokens: settings.maxTokens,
@@ -26,13 +28,10 @@ export async function fetchCompletion(
 		presence_penalty: settings.presencePenalty
 	};
 
-	const url = `${settings.apiBaseUrl.replace(/\/+$/, '')}/completions`;
-
-	const response = await fetch(url, {
+	const response = await fetch('/api/completions', {
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/json',
-			...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {})
+			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify(body)
 	});
