@@ -4,6 +4,7 @@
 	import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 	import LoomNode from './LoomNode.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
+	import { settingsStore } from '$lib/stores/settings.svelte.js';
 
 	const NODE_W = 280;
 	const NODE_H = 160;
@@ -48,6 +49,7 @@
 	function rebuildSim() {
 		const nodes = graphStore.nodes;
 		const edges = graphStore.edges;
+		const s = settingsStore.current;
 		const old = positions;
 
 		simNodes = nodes.map((n) => {
@@ -70,13 +72,13 @@
 				'link',
 				forceLink<SimNode, SimLink>(simLinks)
 					.id((d) => d.id)
-					.distance(280)
-					.strength(0.7)
+					.distance(s.forceLinkDistance)
+					.strength(s.forceLinkStrength)
 			)
-			.force('charge', forceManyBody().strength(-600))
-			.force('x', forceX(0).strength(0.03))
-			.force('y', forceY(0).strength(0.03))
-			.alphaDecay(0.03)
+			.force('charge', forceManyBody().strength(-s.forceRepulsion))
+			.force('x', forceX(0).strength(s.forceCenterStrength))
+			.force('y', forceY(0).strength(s.forceCenterStrength))
+			.alphaDecay(s.forceAlphaDecay)
 			.on('tick', () => {
 				const m = new Map<string, { x: number; y: number }>();
 				for (const sn of simNodes) {
@@ -86,9 +88,39 @@
 			});
 	}
 
+	// Rebuild on structure change
 	$effect(() => {
 		graphStore.structureVersion;
 		untrack(() => rebuildSim());
+	});
+
+	// Update forces live when settings change (without rebuilding nodes)
+	$effect(() => {
+		const s = settingsStore.current;
+		// Touch all force settings to subscribe
+		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay;
+
+		untrack(() => {
+			if (!sim) return;
+			const linkForce = sim.force('link') as ReturnType<typeof forceLink> | undefined;
+			if (linkForce) {
+				linkForce.distance(s.forceLinkDistance).strength(s.forceLinkStrength);
+			}
+			const chargeForce = sim.force('charge') as ReturnType<typeof forceManyBody> | undefined;
+			if (chargeForce) {
+				chargeForce.strength(-s.forceRepulsion);
+			}
+			const xForce = sim.force('x') as ReturnType<typeof forceX> | undefined;
+			if (xForce) {
+				xForce.strength(s.forceCenterStrength);
+			}
+			const yForce = sim.force('y') as ReturnType<typeof forceY> | undefined;
+			if (yForce) {
+				yForce.strength(s.forceCenterStrength);
+			}
+			sim.alphaDecay(s.forceAlphaDecay);
+			sim.alpha(0.5).restart();
+		});
 	});
 
 	// ---- Zoom (wheel) ----

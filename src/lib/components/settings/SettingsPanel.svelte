@@ -202,6 +202,98 @@
 				/>
 			</div>
 
+			<!-- Force Simulation -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Physics</h3>
+
+				<div class="space-y-4">
+					<!-- Repulsion -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceRepulsion">
+							Repulsion: {settings.forceRepulsion}
+						</label>
+						<input
+							id="forceRepulsion"
+							type="range"
+							min="0"
+							max="2000"
+							step="50"
+							class="w-full accent-indigo-500"
+							value={settings.forceRepulsion}
+							oninput={(e) => handleNumberChange('forceRepulsion', e)}
+						/>
+					</div>
+
+					<!-- Link Distance -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceLinkDistance">
+							Link distance: {settings.forceLinkDistance}
+						</label>
+						<input
+							id="forceLinkDistance"
+							type="range"
+							min="50"
+							max="800"
+							step="10"
+							class="w-full accent-indigo-500"
+							value={settings.forceLinkDistance}
+							oninput={(e) => handleNumberChange('forceLinkDistance', e)}
+						/>
+					</div>
+
+					<!-- Link Strength -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceLinkStrength">
+							Link strength: {settings.forceLinkStrength}
+						</label>
+						<input
+							id="forceLinkStrength"
+							type="range"
+							min="0"
+							max="2"
+							step="0.05"
+							class="w-full accent-indigo-500"
+							value={settings.forceLinkStrength}
+							oninput={(e) => handleNumberChange('forceLinkStrength', e)}
+						/>
+					</div>
+
+					<!-- Center Gravity -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceCenterStrength">
+							Center gravity: {settings.forceCenterStrength}
+						</label>
+						<input
+							id="forceCenterStrength"
+							type="range"
+							min="0"
+							max="0.2"
+							step="0.005"
+							class="w-full accent-indigo-500"
+							value={settings.forceCenterStrength}
+							oninput={(e) => handleNumberChange('forceCenterStrength', e)}
+						/>
+					</div>
+
+					<!-- Settling Speed -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceAlphaDecay">
+							Settling speed: {settings.forceAlphaDecay}
+						</label>
+						<input
+							id="forceAlphaDecay"
+							type="range"
+							min="0.005"
+							max="0.1"
+							step="0.005"
+							class="w-full accent-indigo-500"
+							value={settings.forceAlphaDecay}
+							oninput={(e) => handleNumberChange('forceAlphaDecay', e)}
+						/>
+					</div>
+				</div>
+			</div>
+
 			<!-- Actions -->
 			<div class="border-t border-zinc-700 pt-4 space-y-2">
 				<button

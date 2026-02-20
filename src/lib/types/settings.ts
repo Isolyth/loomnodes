@@ -9,6 +9,12 @@ export interface LoomSettings {
 	presencePenalty: number;
 	numGenerations: number;
 	maxParallelRequests: number;
+	// Force simulation
+	forceRepulsion: number;
+	forceLinkDistance: number;
+	forceLinkStrength: number;
+	forceCenterStrength: number;
+	forceAlphaDecay: number;
 }
 
 export const DEFAULT_SETTINGS: LoomSettings = {
@@ -21,5 +27,10 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	frequencyPenalty: 0,
 	presencePenalty: 0,
 	numGenerations: 3,
-	maxParallelRequests: 5
+	maxParallelRequests: 5,
+	forceRepulsion: 600,
+	forceLinkDistance: 280,
+	forceLinkStrength: 0.7,
+	forceCenterStrength: 0.03,
+	forceAlphaDecay: 0.03
 };
