@@ -6,7 +6,6 @@
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 
-	const NODE_W = 340;
 	const NODE_H = 200;
 
 	// ---- Simulation types ----
@@ -20,6 +19,8 @@
 		source: string | SimNode;
 		target: string | SimNode;
 	}
+
+	let NODE_W = $derived(settingsStore.current.nodeWidth);
 
 	// ---- Viewport (pan / zoom) ----
 	let vx = $state(0);
@@ -76,7 +77,7 @@
 					.strength(s.forceLinkStrength)
 			)
 			.force('charge', forceManyBody().strength(-s.forceRepulsion))
-			.force('collide', forceCollide(190).strength(0.8))
+			.force('collide', forceCollide(s.nodeWidth * 0.56).strength(0.8))
 			.force('x', forceX(0).strength(s.forceCenterStrength))
 			.force('y', forceY(0).strength(s.forceCenterStrength))
 			.alphaDecay(s.forceAlphaDecay)
@@ -99,7 +100,7 @@
 	$effect(() => {
 		const s = settingsStore.current;
 		// Touch all force settings to subscribe
-		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay;
+		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay; s.nodeWidth;
 
 		untrack(() => {
 			if (!sim) return;
@@ -113,7 +114,7 @@
 			}
 			const collideForce = sim.force('collide') as ReturnType<typeof forceCollide> | undefined;
 			if (collideForce) {
-				collideForce.strength(0.8);
+				collideForce.radius(s.nodeWidth * 0.56).strength(0.8);
 			}
 			const xForce = sim.force('x') as ReturnType<typeof forceX> | undefined;
 			if (xForce) {

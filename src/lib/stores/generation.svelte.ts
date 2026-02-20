@@ -2,8 +2,18 @@ import { graphStore } from './graph.svelte.js';
 import { settingsStore } from './settings.svelte.js';
 import { fetchCompletion, CompletionServiceError } from '$lib/services/completion.js';
 
+function shuffle<T>(arr: T[]): T[] {
+	const a = [...arr];
+	for (let i = a.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[a[i], a[j]] = [a[j], a[i]];
+	}
+	return a;
+}
+
 function createGenerationStore() {
 	let activeRequests = $state(0);
+	let isBulkGenerating = $state(false);
 
 	async function generateForNode(nodeId: string): Promise<void> {
 		const settings = settingsStore.current;
@@ -62,9 +72,40 @@ function createGenerationStore() {
 		graphStore.setGenerating(nodeId, false);
 	}
 
+	async function generateAllLeaves(): Promise<void> {
+		const settings = settingsStore.current;
+		const nodes = graphStore.nodes;
+
+		// Find leaf nodes with non-empty text
+		let leaves = nodes.filter(
+			(n) => n.data.childIds.length === 0 && n.data.text.trim().length > 0
+		);
+
+		if (leaves.length === 0) return;
+
+		// Randomly select up to maxLeafGenerations
+		const max = settings.maxLeafGenerations;
+		if (leaves.length > max) {
+			leaves = shuffle(leaves).slice(0, max);
+		}
+
+		isBulkGenerating = true;
+		try {
+			await Promise.all(
+				leaves.map((leaf) =>
+					generateForNode(leaf.id).catch(() => {})
+				)
+			);
+		} finally {
+			isBulkGenerating = false;
+		}
+	}
+
 	return {
 		get activeRequests() { return activeRequests; },
-		generateForNode
+		get isBulkGenerating() { return isBulkGenerating; },
+		generateForNode,
+		generateAllLeaves
 	};
 }
 

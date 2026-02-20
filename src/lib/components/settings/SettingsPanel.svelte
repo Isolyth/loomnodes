@@ -92,6 +92,20 @@
 				/>
 			</div>
 
+			<!-- Provider (OpenRouter) -->
+			<div>
+				<label class="block text-xs font-medium text-zinc-400 mb-1" for="provider">Provider (OpenRouter)</label>
+				<input
+					id="provider"
+					type="text"
+					class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+					value={settings.provider}
+					oninput={(e) => handleChange('provider', (e.target as HTMLInputElement).value)}
+					placeholder="e.g. together, deepinfra, groq"
+				/>
+				<p class="text-xs text-zinc-500 mt-1">Optional. Forces a specific provider slug on OpenRouter.</p>
+			</div>
+
 			<!-- Temperature -->
 			<div>
 				<label class="block text-xs font-medium text-zinc-400 mb-1" for="temperature">
@@ -200,6 +214,45 @@
 					value={settings.maxParallelRequests}
 					oninput={(e) => handleNumberChange('maxParallelRequests', e)}
 				/>
+			</div>
+
+			<!-- Max Leaf Generations -->
+			<div>
+				<label class="block text-xs font-medium text-zinc-400 mb-1" for="maxLeafGenerations">Max leaf generations</label>
+				<input
+					id="maxLeafGenerations"
+					type="number"
+					min="1"
+					max="50"
+					class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+					value={settings.maxLeafGenerations}
+					oninput={(e) => handleNumberChange('maxLeafGenerations', e)}
+				/>
+				<p class="text-xs text-zinc-500 mt-1">Max leaves to generate for when using "Generate All Leaves".</p>
+			</div>
+
+			<!-- Display -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Display</h3>
+
+				<div class="space-y-4">
+					<!-- Node Width -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="nodeWidth">
+							Node width: {settings.nodeWidth}px
+						</label>
+						<input
+							id="nodeWidth"
+							type="range"
+							min="200"
+							max="600"
+							step="10"
+							class="w-full accent-indigo-500"
+							value={settings.nodeWidth}
+							oninput={(e) => handleNumberChange('nodeWidth', e)}
+						/>
+					</div>
+				</div>
 			</div>
 
 			<!-- Force Simulation -->

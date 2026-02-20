@@ -4,6 +4,7 @@
 	import NodeToolbar from './NodeToolbar.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { generationStore } from '$lib/stores/generation.svelte.js';
+	import { settingsStore } from '$lib/stores/settings.svelte.js';
 
 	interface Props {
 		id: string;
@@ -11,6 +12,7 @@
 	}
 
 	let { id, data }: Props = $props();
+	let nodeWidth = $derived(settingsStore.current.nodeWidth);
 	let hovered = $state(false);
 	let errorMessage = $state<string | null>(null);
 
@@ -86,7 +88,7 @@
 		class:border-indigo-500={data.isRoot}
 		class:border-zinc-700={!data.isRoot}
 		class:border-amber-500={data.isGenerating}
-		style="width: 340px;"
+		style="width: {nodeWidth}px;"
 	>
 		<div class="p-3">
 			{#if data.isRoot}

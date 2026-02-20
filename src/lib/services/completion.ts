@@ -16,7 +16,7 @@ export async function fetchCompletion(
 	prompt: string,
 	settings: LoomSettings
 ): Promise<string> {
-	const body = {
+	const body: Record<string, unknown> = {
 		apiBaseUrl: settings.apiBaseUrl,
 		apiKey: settings.apiKey,
 		model: settings.model,
@@ -27,6 +27,13 @@ export async function fetchCompletion(
 		frequency_penalty: settings.frequencyPenalty,
 		presence_penalty: settings.presencePenalty
 	};
+
+	if (settings.provider) {
+		body.provider = {
+			only: [settings.provider],
+			allow_fallbacks: false
+		};
+	}
 
 	const response = await fetch('/api/completions', {
 		method: 'POST',
