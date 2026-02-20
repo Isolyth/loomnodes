@@ -12,7 +12,8 @@ export interface LoomSettings {
 	maxParallelRequests: number;
 	maxLeafGenerations: number;
 	// Display
-	nodeWidth: number;
+	nodeSize: number;
+	fontSize: number;
 	// Force simulation
 	forceRepulsion: number;
 	forceLinkDistance: number;
@@ -34,7 +35,8 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	numGenerations: 3,
 	maxParallelRequests: 5,
 	maxLeafGenerations: 10,
-	nodeWidth: 340,
+	nodeSize: 395,
+	fontSize: 14,
 	forceRepulsion: 600,
 	forceLinkDistance: 280,
 	forceLinkStrength: 0.7,

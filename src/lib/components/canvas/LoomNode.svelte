@@ -12,7 +12,10 @@
 	}
 
 	let { id, data }: Props = $props();
-	let nodeWidth = $derived(settingsStore.current.nodeWidth);
+	let nodeWidth = $derived(Math.round(settingsStore.current.nodeSize * 0.862));
+	let nodeHeight = $derived(Math.round(settingsStore.current.nodeSize * 0.507));
+	let fontSize = $derived(settingsStore.current.fontSize);
+	let textareaRows = $derived(Math.max(3, Math.round((nodeHeight - 50) / (fontSize * 1.5))));
 	let hovered = $state(false);
 	let errorMessage = $state<string | null>(null);
 
@@ -101,19 +104,19 @@
 				{#if hasHighlight}
 					<div
 						bind:this={highlightEl}
-						class="absolute inset-0 rounded p-2 text-sm font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
-						style="color: transparent; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
+						class="absolute inset-0 rounded p-2 font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
+						style="color: transparent; font-size: {fontSize}px; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
 						aria-hidden="true"
 					><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
 				{/if}
 
 				<textarea
 					bind:this={textareaEl}
-					class="relative w-full resize-none rounded p-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+					class="relative w-full resize-none rounded p-2 text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
 					class:bg-zinc-800={!hasHighlight}
 					class:bg-transparent={hasHighlight}
-					style="line-height: 1.5;"
-					rows="7"
+					style="font-size: {fontSize}px; line-height: 1.5;"
+					rows={textareaRows}
 					placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
 					value={data.text}
 					oninput={handleTextInput}

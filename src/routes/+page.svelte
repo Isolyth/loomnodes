@@ -8,6 +8,17 @@
 
 	let settingsOpen = $state(false);
 
+	let totalNodes = $derived(graphStore.nodes.length);
+	let leafNodes = $derived(graphStore.nodes.filter((n) => n.data.childIds.length === 0));
+	let leafCount = $derived(leafNodes.length);
+	let nonLeafCount = $derived(totalNodes - leafCount);
+	let totalWords = $derived(
+		graphStore.nodes.reduce((sum, n) => {
+			const words = n.data.text.trim().split(/\s+/).filter(Boolean);
+			return sum + words.length;
+		}, 0)
+	);
+
 	onMount(() => {
 		settingsStore.init();
 		graphStore.init();
@@ -20,6 +31,16 @@
 
 <div class="relative h-full w-full">
 	<LoomCanvas />
+
+	<!-- Stats counters -->
+	<div class="fixed top-4 left-4 z-30 rounded-lg bg-zinc-800/80 backdrop-blur-sm border border-zinc-700 px-3 py-2 shadow-lg">
+		<div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
+			<span>Leaves</span>       <span class="text-zinc-200 text-right">{leafCount}</span>
+			<span>Non-leaf</span>     <span class="text-zinc-200 text-right">{nonLeafCount}</span>
+			<span>Total nodes</span>  <span class="text-zinc-200 text-right">{totalNodes}</span>
+			<span>Total words</span>  <span class="text-zinc-200 text-right">{totalWords.toLocaleString()}</span>
+		</div>
+	</div>
 
 	<!-- Top-right toolbar -->
 	<div class="fixed top-4 right-4 z-30 flex items-center gap-2">

@@ -236,20 +236,37 @@
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Display</h3>
 
 				<div class="space-y-4">
-					<!-- Node Width -->
+					<!-- Node Size -->
 					<div>
-						<label class="block text-xs font-medium text-zinc-400 mb-1" for="nodeWidth">
-							Node width: {settings.nodeWidth}px
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="nodeSize">
+							Node size: {settings.nodeSize}
 						</label>
 						<input
-							id="nodeWidth"
+							id="nodeSize"
 							type="range"
 							min="200"
-							max="600"
-							step="10"
+							max="800"
+							step="5"
 							class="w-full accent-indigo-500"
-							value={settings.nodeWidth}
-							oninput={(e) => handleNumberChange('nodeWidth', e)}
+							value={settings.nodeSize}
+							oninput={(e) => handleNumberChange('nodeSize', e)}
+						/>
+					</div>
+
+					<!-- Font Size -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="fontSize">
+							Font size: {settings.fontSize}px
+						</label>
+						<input
+							id="fontSize"
+							type="range"
+							min="8"
+							max="24"
+							step="1"
+							class="w-full accent-indigo-500"
+							value={settings.fontSize}
+							oninput={(e) => handleNumberChange('fontSize', e)}
 						/>
 					</div>
 				</div>
