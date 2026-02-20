@@ -169,6 +169,38 @@ function createGraphStore() {
 		return nodeDataMap.get(nodeId)?.text ?? '';
 	}
 
+	function exportGraph(): string {
+		return JSON.stringify({ nodes, edges }, null, 2);
+	}
+
+	function importGraph(json: string): void {
+		const data = JSON.parse(json) as SerializedGraph;
+		if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+			throw new Error('Invalid graph format: missing nodes or edges arrays');
+		}
+		if (data.nodes.length === 0) {
+			throw new Error('Invalid graph: no nodes');
+		}
+		const hasRoot = data.nodes.some((n) => n.data?.isRoot);
+		if (!hasRoot) {
+			throw new Error('Invalid graph: no root node');
+		}
+		for (const n of data.nodes) {
+			if (!n.id || !n.data || typeof n.data.text !== 'string') {
+				throw new Error('Invalid graph: malformed node data');
+			}
+		}
+		nodes = data.nodes.map((n) => ({
+			...n,
+			type: 'loomNode',
+			data: { ...n.data, isGenerating: false }
+		}));
+		edges = data.edges;
+		rebuildIndex();
+		persist();
+		structureVersion++;
+	}
+
 	function clearAll() {
 		const root = createRootNode();
 		nodes = [root];
@@ -193,6 +225,8 @@ function createGraphStore() {
 		updatePositionsSilent,
 		persist,
 		getPrompt,
+		exportGraph,
+		importGraph,
 		clearAll
 	};
 }

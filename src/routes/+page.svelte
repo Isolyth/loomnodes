@@ -27,6 +27,38 @@
 	function handleGenerateAllLeaves() {
 		generationStore.generateAllLeaves().catch(() => {});
 	}
+
+	function handleExport() {
+		const json = graphStore.exportGraph();
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `loomnodes-${new Date().toISOString().slice(0, 10)}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	let fileInput: HTMLInputElement;
+
+	function handleImport() {
+		fileInput.click();
+	}
+
+	function handleFileSelected(e: Event) {
+		const file = (e.target as HTMLInputElement).files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			try {
+				graphStore.importGraph(reader.result as string);
+			} catch (err) {
+				alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			}
+		};
+		reader.readAsText(file);
+		(e.target as HTMLInputElement).value = '';
+	}
 </script>
 
 <div class="relative h-full w-full">
@@ -42,8 +74,43 @@
 		</div>
 	</div>
 
+	<!-- Hidden file input for import -->
+	<input
+		bind:this={fileInput}
+		type="file"
+		accept=".json"
+		class="hidden"
+		onchange={handleFileSelected}
+	/>
+
 	<!-- Top-right toolbar -->
 	<div class="fixed top-4 right-4 z-30 flex items-center gap-2">
+		<!-- Import -->
+		<button
+			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
+			onclick={handleImport}
+			title="Import graph"
+		>
+			<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+				<polyline points="7 10 12 15 17 10" />
+				<line x1="12" y1="15" x2="12" y2="3" />
+			</svg>
+		</button>
+
+		<!-- Export -->
+		<button
+			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
+			onclick={handleExport}
+			title="Export graph"
+		>
+			<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+				<polyline points="17 8 12 3 7 8" />
+				<line x1="12" y1="3" x2="12" y2="15" />
+			</svg>
+		</button>
+
 		<!-- Generate All Leaves -->
 		<button
 			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors disabled:opacity-40 disabled:pointer-events-none"
