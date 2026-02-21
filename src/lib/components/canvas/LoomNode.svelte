@@ -59,6 +59,14 @@
 		}
 	});
 
+	$effect(() => {
+		data.text; // track text changes
+		if (data.isGenerating && textareaEl) {
+			textareaEl.scrollTop = textareaEl.scrollHeight;
+			syncScroll();
+		}
+	});
+
 	let showToolbar = $derived(hovered || data.isGenerating);
 </script>
 

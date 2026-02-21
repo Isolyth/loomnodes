@@ -1,6 +1,6 @@
 import { graphStore } from './graph.svelte.js';
 import { settingsStore } from './settings.svelte.js';
-import { fetchCompletion, CompletionServiceError } from '$lib/services/completion.js';
+import { fetchCompletionStream, CompletionServiceError } from '$lib/services/completion.js';
 
 function shuffle<T>(arr: T[]): T[] {
 	const a = [...arr];
@@ -14,6 +14,76 @@ function shuffle<T>(arr: T[]): T[] {
 function createGenerationStore() {
 	let activeRequests = $state(0);
 	let isBulkGenerating = $state(false);
+
+	function generateSingleCompletion(
+		parentId: string,
+		prompt: string,
+		settings: typeof settingsStore.current
+	): Promise<void> {
+		return new Promise<void>((resolve) => {
+			const childId = graphStore.addChildStreaming(parentId, prompt, prompt.length);
+			if (!childId) {
+				resolve();
+				return;
+			}
+
+			let buffer = prompt;
+			let rafScheduled = false;
+
+			function flushToStore() {
+				rafScheduled = false;
+				graphStore.updateTextSilent(childId, buffer);
+			}
+
+			activeRequests++;
+
+			fetchCompletionStream(prompt, settings, {
+				onToken(token: string) {
+					buffer += token;
+					if (!rafScheduled) {
+						rafScheduled = true;
+						requestAnimationFrame(flushToStore);
+					}
+				},
+				onDone() {
+					// Cancel any pending RAF and do a final flush
+					rafScheduled = false;
+					graphStore.updateTextSilent(childId, buffer);
+					graphStore.setGenerating(childId, false);
+					graphStore.persist();
+					activeRequests--;
+					resolve();
+				},
+				onError(error: Error) {
+					rafScheduled = false;
+					// Keep partial text if any was received, append error marker
+					if (buffer.length > prompt.length) {
+						buffer += `\n[Error: ${error.message}]`;
+					} else {
+						buffer = `[Error: ${error.message}]`;
+					}
+					graphStore.updateTextSilent(childId, buffer);
+					graphStore.setGenerating(childId, false);
+					graphStore.persist();
+					activeRequests--;
+					resolve();
+				}
+			}).catch((err) => {
+				// Handle errors thrown before streaming starts (e.g. fetch failure)
+				const message =
+					err instanceof CompletionServiceError
+						? err.message
+						: err instanceof Error
+							? err.message
+							: 'Unknown error';
+				graphStore.updateTextSilent(childId, `[Error: ${message}]`);
+				graphStore.setGenerating(childId, false);
+				graphStore.persist();
+				activeRequests--;
+				resolve();
+			});
+		});
+	}
 
 	async function generateForNode(nodeId: string): Promise<void> {
 		const settings = settingsStore.current;
@@ -31,30 +101,9 @@ function createGenerationStore() {
 		const numGenerations = settings.numGenerations;
 		const maxParallel = settings.maxParallelRequests;
 
-		const errors: string[] = [];
-
-		// Process in batches respecting concurrency limit
 		const tasks: (() => Promise<void>)[] = [];
 		for (let i = 0; i < numGenerations; i++) {
-			const index = i;
-			tasks.push(async () => {
-				activeRequests++;
-				try {
-					const text = await fetchCompletion(prompt, settings);
-					graphStore.addChild(nodeId, prompt + text, prompt.length);
-				} catch (err) {
-					const message =
-						err instanceof CompletionServiceError
-							? err.message
-							: err instanceof Error
-								? err.message
-								: 'Unknown error';
-					errors.push(message);
-					graphStore.addChild(nodeId, `[Error: ${message}]`, 0);
-				} finally {
-					activeRequests--;
-				}
-			});
+			tasks.push(() => generateSingleCompletion(nodeId, prompt, settings));
 		}
 
 		// Run with concurrency limit

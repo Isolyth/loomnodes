@@ -9,8 +9,24 @@ vi.stubGlobal('localStorage', {
 	clear: () => storage.clear()
 });
 
+// Mock requestAnimationFrame to flush synchronously in tests
+vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0; });
+
 // Mock fetch
 vi.stubGlobal('fetch', vi.fn());
+
+/** Create a mock SSE Response from completion text */
+function mockSSEResponse(text: string) {
+	const sseData = `data: ${JSON.stringify({ choices: [{ text, index: 0, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`;
+	const encoder = new TextEncoder();
+	const stream = new ReadableStream({
+		start(controller) {
+			controller.enqueue(encoder.encode(sseData));
+			controller.close();
+		}
+	});
+	return { ok: true, body: stream };
+}
 
 const { graphStore } = await import('$lib/stores/graph.svelte.js');
 const { settingsStore } = await import('$lib/stores/settings.svelte.js');
@@ -38,15 +54,7 @@ describe('generation flow integration', () => {
 		let callCount = 0;
 		const mockFetch = vi.fn().mockImplementation(() => {
 			callCount++;
-			return Promise.resolve({
-				ok: true,
-				json: () =>
-					Promise.resolve({
-						choices: [
-							{ text: ` completion ${callCount}`, index: 0, finish_reason: 'stop' }
-						]
-					})
-			});
+			return Promise.resolve(mockSSEResponse(` completion ${callCount}`));
 		});
 		vi.stubGlobal('fetch', mockFetch);
 
@@ -125,14 +133,7 @@ describe('generation flow integration', () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn().mockImplementation(
-				() =>
-					pendingRequest.then(() => ({
-						ok: true,
-						json: () =>
-							Promise.resolve({
-								choices: [{ text: ' done', index: 0, finish_reason: 'stop' }]
-							})
-					}))
+				() => pendingRequest.then(() => mockSSEResponse(' done'))
 			)
 		);
 

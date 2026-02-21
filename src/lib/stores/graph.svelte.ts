@@ -111,6 +111,57 @@ function createGraphStore() {
 		return childId;
 	}
 
+	function addChildStreaming(parentId: string, initialText: string, generatedTextStart: number = 0): string {
+		const parent = nodes.find((n) => n.id === parentId);
+		if (!parent) return '';
+
+		const childId = createId();
+
+		const childNode: Node<LoomNodeData> = {
+			id: childId,
+			type: 'loomNode',
+			position: { x: 0, y: 0 },
+			data: {
+				id: childId,
+				text: initialText,
+				parentId,
+				childIds: [],
+				isRoot: false,
+				isGenerating: true,
+				generatedTextStart
+			},
+			width: NODE_WIDTH,
+			height: NODE_HEIGHT
+		};
+
+		const newEdge: Edge = {
+			id: `e-${parentId}-${childId}`,
+			source: parentId,
+			target: childId,
+			type: 'default'
+		};
+
+		const updatedNodes = nodes.map((n) =>
+			n.id === parentId
+				? { ...n, data: { ...n.data, childIds: [...n.data.childIds, childId] } }
+				: n
+		);
+
+		nodes = [...updatedNodes, childNode];
+		edges = [...edges, newEdge];
+		rebuildIndex();
+		persist();
+		structureVersion++;
+		return childId;
+	}
+
+	function updateTextSilent(nodeId: string, text: string) {
+		nodes = nodes.map((n) =>
+			n.id === nodeId ? { ...n, data: { ...n.data, text } } : n
+		);
+		rebuildIndex();
+	}
+
 	function deleteNode(nodeId: string) {
 		const node = nodes.find((n) => n.id === nodeId);
 		if (!node || node.data.isRoot) return;
@@ -219,8 +270,10 @@ function createGraphStore() {
 		get structureVersion() { return structureVersion; },
 		init,
 		addChild,
+		addChildStreaming,
 		deleteNode,
 		updateText,
+		updateTextSilent,
 		setGenerating,
 		updatePositionsSilent,
 		persist,

@@ -19,6 +19,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		body: JSON.stringify(body)
 	});
 
+	if (body.stream) {
+		if (!response.ok || !response.body) {
+			const data = await response.json();
+			return json(data, { status: response.status });
+		}
+
+		return new Response(response.body, {
+			headers: {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				'Connection': 'keep-alive'
+			}
+		});
+	}
+
 	const data = await response.json();
 
 	if (!response.ok) {
