@@ -26,6 +26,7 @@
 
 	function handleGenerate() {
 		errorMessage = null;
+		graphStore.setError(id, undefined);
 		generationStore.generateForNode(id).catch((err: Error) => {
 			errorMessage = err.message;
 		});
@@ -96,11 +97,18 @@
 	<!-- Card -->
 	<div
 		class="rounded-lg border bg-zinc-900 shadow-xl transition-shadow hover:shadow-2xl"
-		class:border-indigo-500={data.isRoot}
-		class:border-zinc-700={!data.isRoot}
-		class:border-amber-500={data.isGenerating}
+		class:border-indigo-500={data.isRoot && !data.isGenerating && !data.error}
+		class:border-zinc-700={!data.isRoot && !data.isGenerating && !data.error}
+		class:border-amber-500={data.isGenerating && !data.error}
+		class:border-red-500={!!data.error}
 		style="width: {nodeWidth}px;"
 	>
+		{#if data.error}
+			<div class="flex items-start gap-1.5 rounded-t-lg bg-red-950/80 px-3 py-1.5 text-xs text-red-300 border-b border-red-500/30">
+				<span class="shrink-0 mt-px">&#x26A0;</span>
+				<span class="truncate" title={data.error}>{data.error}</span>
+			</div>
+		{/if}
 		<div class="p-3">
 			{#if data.isRoot}
 				<div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400">

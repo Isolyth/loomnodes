@@ -49,6 +49,35 @@ function createGenerationStore() {
 
 		activeRequests += requests.length;
 
+		function markError(id: string, message: string) {
+			if (completed.has(id)) return;
+			completed.add(id);
+			rafScheduled.set(id, false);
+			// Restore prompt text if no tokens were received
+			const buf = buffers.get(id) ?? '';
+			const prompt = prompts.get(id) ?? '';
+			if (buf.length <= prompt.length) {
+				graphStore.updateTextSilent(id, prompt);
+			} else {
+				graphStore.updateTextSilent(id, buf);
+			}
+			graphStore.setError(id, message);
+			graphStore.setGenerating(id, false);
+			activeRequests--;
+		}
+
+		function markDone(id: string) {
+			if (completed.has(id)) return;
+			completed.add(id);
+			rafScheduled.set(id, false);
+			const buf = buffers.get(id);
+			if (buf != null) {
+				graphStore.updateTextSilent(id, buf);
+			}
+			graphStore.setGenerating(id, false);
+			activeRequests--;
+		}
+
 		try {
 			await fetchCompletionStreamBatch(requests, settings, {
 				onToken(id: string, token: string) {
@@ -67,35 +96,15 @@ function createGenerationStore() {
 					}
 				},
 				onDone(id: string) {
-					if (completed.has(id)) return;
-					completed.add(id);
-					rafScheduled.set(id, false);
-					const buf = buffers.get(id);
-					if (buf != null) {
-						graphStore.updateTextSilent(id, buf);
-					}
-					graphStore.setGenerating(id, false);
+					markDone(id);
 					graphStore.persist();
-					activeRequests--;
 				},
 				onError(id: string, error: Error) {
-					if (completed.has(id)) return;
-					completed.add(id);
-					rafScheduled.set(id, false);
-					const buf = buffers.get(id) ?? '';
-					const prompt = prompts.get(id) ?? '';
-					if (buf.length > prompt.length) {
-						graphStore.updateTextSilent(id, buf + `\n[Error: ${error.message}]`);
-					} else {
-						graphStore.updateTextSilent(id, `[Error: ${error.message}]`);
-					}
-					graphStore.setGenerating(id, false);
+					markError(id, error.message);
 					graphStore.persist();
-					activeRequests--;
 				}
 			});
 		} catch (err) {
-			// Handle batch-level errors (connection failure, etc.)
 			const message =
 				err instanceof CompletionServiceError
 					? err.message
@@ -103,15 +112,19 @@ function createGenerationStore() {
 						? err.message
 						: 'Unknown error';
 			for (const req of requests) {
-				if (!completed.has(req.id)) {
-					completed.add(req.id);
-					graphStore.updateTextSilent(req.id, `[Error: ${message}]`);
-					graphStore.setGenerating(req.id, false);
-					activeRequests--;
-				}
+				markError(req.id, message);
 			}
-			graphStore.persist();
 		}
+
+		// Catch orphaned requests that never received done/error
+		let hadOrphans = false;
+		for (const req of requests) {
+			if (!completed.has(req.id)) {
+				markError(req.id, 'Stream ended without response');
+				hadOrphans = true;
+			}
+		}
+		if (hadOrphans) graphStore.persist();
 	}
 
 	async function generateForNode(nodeId: string): Promise<void> {
@@ -127,6 +140,7 @@ function createGenerationStore() {
 		}
 
 		graphStore.setGenerating(nodeId, true);
+		graphStore.setError(nodeId, undefined);
 
 		await runBatchGeneration(
 			[{ parentId: nodeId, prompt, count: settings.numGenerations }],
@@ -140,14 +154,12 @@ function createGenerationStore() {
 		const settings = settingsStore.current;
 		const nodes = graphStore.nodes;
 
-		// Find leaf nodes with non-empty text
 		let leaves = nodes.filter(
 			(n) => n.data.childIds.length === 0 && n.data.text.trim().length > 0
 		);
 
 		if (leaves.length === 0) return;
 
-		// Randomly select up to maxLeafGenerations
 		const max = settings.maxLeafGenerations;
 		if (leaves.length > max) {
 			leaves = shuffle(leaves).slice(0, max);
@@ -157,6 +169,7 @@ function createGenerationStore() {
 		try {
 			for (const leaf of leaves) {
 				graphStore.setGenerating(leaf.id, true);
+				graphStore.setError(leaf.id, undefined);
 			}
 
 			const entries = leaves.map((leaf) => ({

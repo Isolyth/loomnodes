@@ -248,6 +248,10 @@ function createGraphStore() {
 		patchNode(nodeId, { isGenerating });
 	}
 
+	function setError(nodeId: string, error: string | undefined) {
+		patchNode(nodeId, { error });
+	}
+
 	/** Update positions without persisting — used by the live simulation on each tick. */
 	function updatePositionsSilent(positions: Map<string, { x: number; y: number }>) {
 		nodes = nodes.map((n) => {
@@ -315,6 +319,7 @@ function createGraphStore() {
 		updateText,
 		updateTextSilent,
 		setGenerating,
+		setError,
 		updatePositionsSilent,
 		persist,
 		getPrompt,
