@@ -37,6 +37,9 @@
 	let containerW = $state(0);
 	let containerH = $state(0);
 
+	// ---- Level of detail: render lightweight placeholders when zoomed out ----
+	let useLOD = $derived(NODE_W * vscale < settingsStore.current.lodThreshold);
+
 	// ---- Viewport bounds in world coordinates (with margin for smooth pop-in) ----
 	const CULL_MARGIN = 100;
 	let viewLeft = $derived((-vx / vscale) - CULL_MARGIN);
@@ -64,6 +67,7 @@
 	let panStartVy = 0;
 
 	let dragId: string | null = null;
+	let hoveredId: string | null = null;
 
 	// ---- Animation state ----
 	let animFrameId: number | null = null;
@@ -344,7 +348,7 @@
 		if (dragId) {
 			const sn = simNodeMap.get(dragId);
 			const nd = graphStore.nodes.find((n) => n.id === dragId);
-			if (sn && nd && !nd.data.isRoot) {
+			if (sn && nd && !nd.data.isRoot && hoveredId !== dragId) {
 				sn.fx = null;
 				sn.fy = null;
 			}
@@ -354,6 +358,30 @@
 			isPanning = false;
 		}
 		container.releasePointerCapture(e.pointerId);
+	}
+
+	// ---- Hover pin (freeze hovered node in physics) ----
+	function onNodeEnter(id: string) {
+		if (settingsStore.current.viewMode !== 'graph') return;
+		hoveredId = id;
+		const sn = simNodeMap.get(id);
+		if (sn && sn.fx == null) {
+			sn.fx = sn.x;
+			sn.fy = sn.y;
+		}
+	}
+
+	function onNodeLeave(id: string) {
+		if (hoveredId !== id) return;
+		hoveredId = null;
+		if (dragId === id) return; // still dragging, keep pinned
+		const nd = graphStore.nodes.find((n) => n.id === id);
+		if (nd?.data.isRoot) return; // root stays pinned
+		const sn = simNodeMap.get(id);
+		if (sn) {
+			sn.fx = null;
+			sn.fy = null;
+		}
 	}
 
 	// ---- Helpers ----
@@ -442,13 +470,34 @@
 		{#each graphStore.nodes as node (node.id)}
 			{@const pos = positions.get(node.id)}
 			{#if pos && pos.x >= viewLeft - NODE_W && pos.x <= viewRight + NODE_W && pos.y >= viewTop - NODE_H && pos.y <= viewBottom + NODE_H}
-				<div
-					class="absolute"
-					style="transform: translate({pos.x - NODE_W / 2}px, {pos.y - NODE_H / 2}px)"
-					data-node-id={node.id}
-				>
-					<LoomNode id={node.id} data={node.data} />
-				</div>
+				{#if useLOD}
+					<!-- Lightweight placeholder when zoomed out -->
+					<div
+						class="absolute rounded-lg border"
+						class:border-indigo-500={node.data.isRoot}
+						class:border-amber-500={node.data.isGenerating}
+						class:border-zinc-600={!node.data.isRoot && !node.data.isGenerating}
+						style="
+							transform: translate({pos.x - NODE_W / 2}px, {pos.y - NODE_H / 2}px);
+							width: {NODE_W}px;
+							height: {NODE_H}px;
+							background: {node.data.isGenerating ? '#78350f' : '#27272a'};
+						"
+						data-node-id={node.id}
+						onpointerenter={() => onNodeEnter(node.id)}
+						onpointerleave={() => onNodeLeave(node.id)}
+					></div>
+				{:else}
+					<div
+						class="absolute"
+						style="transform: translate({pos.x - NODE_W / 2}px, {pos.y - NODE_H / 2}px)"
+						data-node-id={node.id}
+						onpointerenter={() => onNodeEnter(node.id)}
+						onpointerleave={() => onNodeLeave(node.id)}
+					>
+						<LoomNode id={node.id} data={node.data} />
+					</div>
+				{/if}
 			{/if}
 		{/each}
 	</div>

@@ -269,6 +269,24 @@
 							oninput={(e) => handleNumberChange('fontSize', e)}
 						/>
 					</div>
+
+					<!-- LOD Threshold -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="lodThreshold">
+							LOD threshold: {settings.lodThreshold}px
+						</label>
+						<input
+							id="lodThreshold"
+							type="range"
+							min="40"
+							max="300"
+							step="10"
+							class="w-full accent-indigo-500"
+							value={settings.lodThreshold}
+							oninput={(e) => handleNumberChange('lodThreshold', e)}
+						/>
+						<p class="text-xs text-zinc-500 mt-1">Nodes smaller than this on screen show as simple boxes.</p>
+					</div>
 				</div>
 			</div>
 

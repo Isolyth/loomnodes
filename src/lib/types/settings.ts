@@ -15,6 +15,7 @@ export interface LoomSettings {
 	viewMode: 'graph' | 'tree';
 	nodeSize: number;
 	fontSize: number;
+	lodThreshold: number;
 	// Force simulation
 	forceRepulsion: number;
 	forceLinkDistance: number;
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	viewMode: 'graph',
 	nodeSize: 395,
 	fontSize: 14,
+	lodThreshold: 120,
 	forceRepulsion: 600,
 	forceLinkDistance: 280,
 	forceLinkStrength: 0.7,
