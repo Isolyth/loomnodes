@@ -1,5 +1,6 @@
 import { graphStore } from './graph.svelte.js';
 import { settingsStore } from './settings.svelte.js';
+import { embeddingStore } from './embedding.svelte.js';
 import {
 	fetchCompletionStreamBatch,
 	CompletionServiceError
@@ -76,6 +77,11 @@ function createGenerationStore() {
 			}
 			graphStore.setGenerating(id, false);
 			activeRequests--;
+
+			// Auto-embed the new node if enabled
+			if (settingsStore.current.autoEmbedOnGenerate && settingsStore.current.embeddingApiKey) {
+				setTimeout(() => embeddingStore.embedNode(id), 0);
+			}
 		}
 
 		try {

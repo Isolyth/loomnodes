@@ -5,6 +5,7 @@
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { generationStore } from '$lib/stores/generation.svelte.js';
+	import { embeddingStore } from '$lib/stores/embedding.svelte.js';
 
 	let settingsOpen = $state(false);
 	let resetKey = $state(0);
@@ -31,11 +32,35 @@
 	onMount(() => {
 		settingsStore.init();
 		graphStore.init();
+		embeddingStore.init();
 	});
 
 	function handleGenerateAllLeaves() {
 		generationStore.generateAllLeaves().catch(() => {});
 	}
+
+	let embeddingAndClustering = $state(false);
+
+	async function handleEmbedAndCluster() {
+		embeddingAndClustering = true;
+		try {
+			await embeddingStore.embedAllDirty();
+			const settings = settingsStore.current;
+			if (settings.clusterMode === 'auto') {
+				embeddingStore.runAutoClustering();
+				embeddingStore.labelClusters();
+			} else {
+				embeddingStore.assignQualityClusters();
+			}
+		} catch (err) {
+			alert(`Embedding failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		} finally {
+			embeddingAndClustering = false;
+		}
+	}
+
+	let embeddedCount = $derived(embeddingStore.embeddings.size);
+	let clusterCount = $derived(embeddingStore.clusters.length);
 
 	function handleExport() {
 		const json = graphStore.exportGraph();
@@ -55,9 +80,9 @@
 	}
 
 	function toggleViewMode() {
-		settingsStore.update({
-			viewMode: settingsStore.current.viewMode === 'graph' ? 'tree' : 'graph'
-		});
+		const current = settingsStore.current.viewMode;
+		const next = current === 'graph' ? 'tree' : current === 'tree' ? 'circle' : 'graph';
+		settingsStore.update({ viewMode: next });
 	}
 
 	function handleFileSelected(e: Event) {
@@ -86,6 +111,8 @@
 			<span>Non-leaf</span>     <span class="text-zinc-200 text-right">{nonLeafCount}</span>
 			<span>Total nodes</span>  <span class="text-zinc-200 text-right">{totalNodes}</span>
 			<span>Total words</span>  <span class="text-zinc-200 text-right">{totalWords.toLocaleString()}</span>
+			<span>Embedded</span>     <span class="text-zinc-200 text-right">{embeddedCount}</span>
+			<span>Clusters</span>     <span class="text-zinc-200 text-right">{clusterCount}</span>
 		</div>
 	</div>
 
@@ -130,10 +157,10 @@
 		<button
 			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
 			onclick={toggleViewMode}
-			title={settingsStore.current.viewMode === 'graph' ? 'Switch to tree view' : 'Switch to graph view'}
+			title={settingsStore.current.viewMode === 'graph' ? 'Switch to tree view' : settingsStore.current.viewMode === 'tree' ? 'Switch to circle view' : 'Switch to graph view'}
 		>
 			{#if settingsStore.current.viewMode === 'graph'}
-				<!-- Tree icon -->
+				<!-- Tree icon (next mode) -->
 				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<rect x="9" y="2" width="6" height="4" rx="1" />
 					<rect x="2" y="18" width="6" height="4" rx="1" />
@@ -145,8 +172,15 @@
 					<line x1="12" y1="12" x2="12" y2="18" />
 					<line x1="19" y1="12" x2="19" y2="18" />
 				</svg>
+			{:else if settingsStore.current.viewMode === 'tree'}
+				<!-- Circle icon (next mode) -->
+				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="10" />
+					<circle cx="12" cy="12" r="5.5" />
+					<circle cx="12" cy="12" r="1.5" fill="currentColor" />
+				</svg>
 			{:else}
-				<!-- Graph icon -->
+				<!-- Graph icon (next mode) -->
 				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<line x1="6" y1="6" x2="18" y2="8" />
 					<line x1="6" y1="6" x2="12" y2="18" />
@@ -171,6 +205,31 @@
 				</svg>
 			</button>
 		{/if}
+
+		<!-- Embed & Cluster -->
+		<button
+			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors disabled:opacity-40 disabled:pointer-events-none"
+			onclick={handleEmbedAndCluster}
+			disabled={embeddingAndClustering || embeddingStore.isEmbedding}
+			title="Embed nodes & cluster"
+		>
+			{#if embeddingAndClustering || embeddingStore.isEmbedding}
+				<svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+				</svg>
+			{:else}
+				<!-- Cluster/scatter icon -->
+				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="6" cy="6" r="2" />
+					<circle cx="8" cy="10" r="2" />
+					<circle cx="4" cy="9" r="2" />
+					<circle cx="18" cy="16" r="2" />
+					<circle cx="16" cy="19" r="2" />
+					<circle cx="20" cy="18" r="2" />
+					<circle cx="14" cy="5" r="2" />
+				</svg>
+			{/if}
+		</button>
 
 		<!-- Generate All Leaves -->
 		<button

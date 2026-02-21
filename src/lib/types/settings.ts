@@ -12,10 +12,11 @@ export interface LoomSettings {
 	maxParallelRequests: number;
 	maxLeafGenerations: number;
 	// Display
-	viewMode: 'graph' | 'tree';
+	viewMode: 'graph' | 'tree' | 'circle';
 	nodeSize: number;
 	fontSize: number;
 	lodThreshold: number;
+	circleLayerSpacing: number;
 	// Force simulation
 	forceRepulsion: number;
 	forceLinkDistance: number;
@@ -23,6 +24,19 @@ export interface LoomSettings {
 	forceCenterStrength: number;
 	forceAlphaDecay: number;
 	forceLeafRepulsion: number;
+	// Embedding API
+	embeddingApiKey: string;
+	embeddingApiBaseUrl: string;
+	embeddingModel: string;
+	autoEmbedOnGenerate: boolean;
+	// Clustering
+	clusterMode: 'auto' | 'qualities';
+	dbscanEpsilon: number;
+	dbscanMinPoints: number;
+	qualityThreshold: number;
+	// Regions
+	showRegions: boolean;
+	regionOpacity: number;
 }
 
 export const DEFAULT_SETTINGS: LoomSettings = {
@@ -42,10 +56,21 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	nodeSize: 395,
 	fontSize: 14,
 	lodThreshold: 120,
+	circleLayerSpacing: 350,
 	forceRepulsion: 600,
 	forceLinkDistance: 280,
 	forceLinkStrength: 0.7,
 	forceCenterStrength: 0.03,
 	forceAlphaDecay: 0.03,
-	forceLeafRepulsion: 0.02
+	forceLeafRepulsion: 0.02,
+	embeddingApiKey: '',
+	embeddingApiBaseUrl: 'https://api.openai.com/v1',
+	embeddingModel: 'text-embedding-3-small',
+	autoEmbedOnGenerate: true,
+	clusterMode: 'auto',
+	dbscanEpsilon: 0.15,
+	dbscanMinPoints: 2,
+	qualityThreshold: 0.15,
+	showRegions: true,
+	regionOpacity: 0.08
 };

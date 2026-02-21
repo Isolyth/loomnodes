@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
+	import { embeddingStore } from '$lib/stores/embedding.svelte.js';
 
 	interface Props {
 		open: boolean;
@@ -10,8 +11,10 @@
 	let { open, onclose }: Props = $props();
 
 	let settings = $derived(settingsStore.current);
+	let newQualityText = $state('');
+	let addingQuality = $state(false);
 
-	function handleChange(key: string, value: string | number) {
+	function handleChange(key: string, value: string | number | boolean) {
 		settingsStore.update({ [key]: value });
 	}
 
@@ -26,6 +29,21 @@
 	function handleClearTree() {
 		if (confirm('Clear the entire tree? This cannot be undone.')) {
 			graphStore.clearAll();
+			embeddingStore.clearAll();
+		}
+	}
+
+	async function handleAddQuality() {
+		const desc = newQualityText.trim();
+		if (!desc) return;
+		addingQuality = true;
+		try {
+			await embeddingStore.addQuality(desc);
+			newQualityText = '';
+		} catch (err) {
+			alert(`Failed to add quality: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		} finally {
+			addingQuality = false;
 		}
 	}
 </script>
@@ -287,6 +305,24 @@
 						/>
 						<p class="text-xs text-zinc-500 mt-1">Nodes smaller than this on screen show as simple boxes.</p>
 					</div>
+
+					<!-- Circle Layer Spacing -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="circleLayerSpacing">
+							Circle spacing: {settings.circleLayerSpacing}
+						</label>
+						<input
+							id="circleLayerSpacing"
+							type="range"
+							min="150"
+							max="800"
+							step="10"
+							class="w-full accent-indigo-500"
+							value={settings.circleLayerSpacing}
+							oninput={(e) => handleNumberChange('circleLayerSpacing', e)}
+						/>
+						<p class="text-xs text-zinc-500 mt-1">Distance between concentric circles in circle layout.</p>
+					</div>
 				</div>
 			</div>
 
@@ -394,6 +430,197 @@
 							class="w-full accent-indigo-500"
 							value={settings.forceAlphaDecay}
 							oninput={(e) => handleNumberChange('forceAlphaDecay', e)}
+						/>
+					</div>
+				</div>
+			</div>
+
+			<!-- Embedding API -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Embedding API</h3>
+
+				<div class="space-y-4">
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="embeddingApiKey">Embedding API Key</label>
+						<input
+							id="embeddingApiKey"
+							type="password"
+							class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+							value={settings.embeddingApiKey}
+							oninput={(e) => handleChange('embeddingApiKey', (e.target as HTMLInputElement).value)}
+							placeholder="sk-..."
+						/>
+					</div>
+
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="embeddingApiBaseUrl">Embedding Base URL</label>
+						<input
+							id="embeddingApiBaseUrl"
+							type="text"
+							class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+							value={settings.embeddingApiBaseUrl}
+							oninput={(e) => handleChange('embeddingApiBaseUrl', (e.target as HTMLInputElement).value)}
+						/>
+					</div>
+
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="embeddingModel">Embedding Model</label>
+						<input
+							id="embeddingModel"
+							type="text"
+							class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+							value={settings.embeddingModel}
+							oninput={(e) => handleChange('embeddingModel', (e.target as HTMLInputElement).value)}
+						/>
+					</div>
+
+					<div class="flex items-center gap-2">
+						<input
+							id="autoEmbedOnGenerate"
+							type="checkbox"
+							class="rounded border-zinc-700 bg-zinc-800 accent-indigo-500"
+							checked={settings.autoEmbedOnGenerate}
+							onchange={(e) => handleChange('autoEmbedOnGenerate', (e.target as HTMLInputElement).checked)}
+						/>
+						<label class="text-xs text-zinc-400" for="autoEmbedOnGenerate">Auto-embed after generation</label>
+					</div>
+				</div>
+			</div>
+
+			<!-- Clustering -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Clustering</h3>
+
+				<div class="space-y-4">
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="clusterMode">Mode</label>
+						<select
+							id="clusterMode"
+							class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+							value={settings.clusterMode}
+							onchange={(e) => handleChange('clusterMode', (e.target as HTMLSelectElement).value)}
+						>
+							<option value="auto">Auto (DBSCAN)</option>
+							<option value="qualities">User-defined Qualities</option>
+						</select>
+					</div>
+
+					{#if settings.clusterMode === 'auto'}
+						<div>
+							<label class="block text-xs font-medium text-zinc-400 mb-1" for="dbscanEpsilon">
+								DBSCAN Epsilon: {settings.dbscanEpsilon}
+							</label>
+							<input
+								id="dbscanEpsilon"
+								type="range"
+								min="0.1"
+								max="2"
+								step="0.05"
+								class="w-full accent-indigo-500"
+								value={settings.dbscanEpsilon}
+								oninput={(e) => handleNumberChange('dbscanEpsilon', e)}
+							/>
+							<p class="text-xs text-zinc-500 mt-1">Distance threshold for neighborhood. Lower = tighter clusters.</p>
+						</div>
+
+						<div>
+							<label class="block text-xs font-medium text-zinc-400 mb-1" for="dbscanMinPoints">Min Points</label>
+							<input
+								id="dbscanMinPoints"
+								type="number"
+								min="2"
+								max="20"
+								class="w-full rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+								value={settings.dbscanMinPoints}
+								oninput={(e) => handleNumberChange('dbscanMinPoints', e)}
+							/>
+						</div>
+					{:else}
+						<div>
+							<label class="block text-xs font-medium text-zinc-400 mb-1" for="qualityThreshold">
+								Quality Threshold: {settings.qualityThreshold}
+							</label>
+							<input
+								id="qualityThreshold"
+								type="range"
+								min="0"
+								max="1"
+								step="0.05"
+								class="w-full accent-indigo-500"
+								value={settings.qualityThreshold}
+								oninput={(e) => handleNumberChange('qualityThreshold', e)}
+							/>
+							<p class="text-xs text-zinc-500 mt-1">Min similarity to assign a node to a quality.</p>
+						</div>
+
+						<!-- Qualities list -->
+						<div class="space-y-2">
+							{#each embeddingStore.qualities as quality (quality.id)}
+								<div class="flex items-center gap-2 rounded bg-zinc-800 border border-zinc-700 px-2 py-1.5">
+									<span class="w-3 h-3 rounded-full shrink-0" style="background: {quality.color}"></span>
+									<span class="text-xs text-zinc-300 flex-1 truncate">{quality.description}</span>
+									<button
+										class="text-zinc-500 hover:text-red-400 transition-colors"
+										onclick={() => embeddingStore.removeQuality(quality.id)}
+										title="Remove quality"
+									>
+										<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M18 6L6 18M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+							{/each}
+
+							<div class="flex gap-2">
+								<input
+									type="text"
+									class="flex-1 rounded bg-zinc-800 border border-zinc-700 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-indigo-500"
+									placeholder="e.g. football, python scripts..."
+									bind:value={newQualityText}
+									onkeydown={(e) => e.key === 'Enter' && handleAddQuality()}
+								/>
+								<button
+									class="rounded bg-indigo-600 px-2 py-1.5 text-xs text-white hover:bg-indigo-500 transition-colors disabled:opacity-40"
+									onclick={handleAddQuality}
+									disabled={addingQuality || !newQualityText.trim()}
+								>
+									{addingQuality ? '...' : 'Add'}
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Regions -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Regions</h3>
+
+				<div class="space-y-4">
+					<div class="flex items-center gap-2">
+						<input
+							id="showRegions"
+							type="checkbox"
+							class="rounded border-zinc-700 bg-zinc-800 accent-indigo-500"
+							checked={settings.showRegions}
+							onchange={(e) => handleChange('showRegions', (e.target as HTMLInputElement).checked)}
+						/>
+						<label class="text-xs text-zinc-400" for="showRegions">Show cluster regions</label>
+					</div>
+
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="regionOpacity">
+							Region opacity: {settings.regionOpacity}
+						</label>
+						<input
+							id="regionOpacity"
+							type="range"
+							min="0"
+							max="0.3"
+							step="0.01"
+							class="w-full accent-indigo-500"
+							value={settings.regionOpacity}
+							oninput={(e) => handleNumberChange('regionOpacity', e)}
 						/>
 					</div>
 				</div>

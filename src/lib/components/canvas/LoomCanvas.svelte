@@ -3,9 +3,10 @@
 	import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
 	import type { Simulation, SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 	import LoomNode from './LoomNode.svelte';
+	import ClusterRegions from './ClusterRegions.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
-	import { computeLayout } from '$lib/graph/layout.js';
+	import { computeLayout, computeCircleLayout } from '$lib/graph/layout.js';
 
 	// ---- Simulation types ----
 	interface SimNode extends SimulationNodeDatum {
@@ -49,6 +50,11 @@
 
 	// ---- Positions coming out of d3-force ----
 	let positions = $state.raw<Map<string, { x: number; y: number }>>(new Map());
+
+	// ---- Circle mode: radii for concentric ring guides ----
+	let circleLayerRadii = $state.raw<number[]>([]);
+	// Per-node radius lookup for circle-constrained dragging
+	let circleNodeRadius = new Map<string, number>();
 
 	// ---- Simulation state ----
 	let sim: Simulation<SimNode, SimLink> | null = null;
@@ -110,7 +116,7 @@
 	}
 
 	// ---- Build / rebuild layout on structure or mode change ----
-	let prevViewMode: 'graph' | 'tree' = 'graph';
+	let prevViewMode: 'graph' | 'tree' | 'circle' = 'graph';
 
 	function rebuildLayout() {
 		const nodes = graphStore.nodes;
@@ -120,6 +126,7 @@
 		if (s.viewMode === 'tree') {
 			sim?.stop();
 			sim = null;
+			circleLayerRadii = [];
 
 			const newPositions = computeLayout(nodes, edges, NODE_W, NODE_H);
 			const wasModeSwitch = prevViewMode !== 'tree';
@@ -142,7 +149,70 @@
 			return;
 		}
 
+		if (s.viewMode === 'circle') {
+			prevViewMode = 'circle';
+			if (animFrameId != null) {
+				cancelAnimationFrame(animFrameId);
+				animFrameId = null;
+			}
+
+			const result = computeCircleLayout(nodes, s.circleLayerSpacing);
+			circleLayerRadii = result.layerRadii;
+			circleNodeRadius = result.nodeRadii;
+			const circleSeeds = result.positions;
+
+			// Seed sim nodes from previous positions or circle layout positions
+			const old = positions;
+			simNodes = nodes.map((n) => {
+				const prev = old.get(n.id) ?? circleSeeds.get(n.id);
+				return {
+					id: n.id,
+					x: prev?.x ?? 0,
+					y: prev?.y ?? 0,
+					...(n.data.isRoot ? { fx: 0, fy: 0 } : {})
+				} satisfies SimNode;
+			});
+
+			simNodeMap = new Map<string, SimNode>();
+			for (const sn of simNodes) simNodeMap.set(sn.id, sn);
+
+			const simLinks: SimLink[] = edges.map((e) => ({ source: e.source, target: e.target }));
+
+			sim?.stop();
+
+			const nr = circleNodeRadius; // capture for tick closure
+
+			sim = forceSimulation<SimNode, SimLink>(simNodes)
+				.force(
+					'link',
+					forceLink<SimNode, SimLink>(simLinks)
+						.id((d) => d.id)
+						.distance(s.forceLinkDistance)
+						.strength(s.forceLinkStrength)
+				)
+				.force('charge', forceManyBody().strength(-s.forceRepulsion))
+				.force('collide', forceCollide(s.nodeSize * 0.5).strength(0.8))
+				.alphaDecay(s.forceAlphaDecay)
+				.on('tick', () => {
+					// Project each node onto its circle
+					for (const sn of simNodes) {
+						const r = nr.get(sn.id);
+						if (r == null || r === 0) continue; // root pinned
+						const angle = Math.atan2(sn.y ?? 0, sn.x ?? 0);
+						sn.x = r * Math.cos(angle);
+						sn.y = r * Math.sin(angle);
+					}
+					const m = new Map<string, { x: number; y: number }>();
+					for (const sn of simNodes) {
+						m.set(sn.id, { x: sn.x ?? 0, y: sn.y ?? 0 });
+					}
+					positions = m;
+				});
+			return;
+		}
+
 		prevViewMode = 'graph';
+		circleLayerRadii = [];
 		if (animFrameId != null) {
 			cancelAnimationFrame(animFrameId);
 			animFrameId = null;
@@ -226,6 +296,7 @@
 	$effect(() => {
 		graphStore.structureVersion;
 		settingsStore.current.viewMode;
+		settingsStore.current.circleLayerSpacing;
 		const rk = resetKey;
 		untrack(() => {
 			if (rk !== lastResetKey) {
@@ -242,13 +313,13 @@
 		});
 	});
 
-	// Update forces live when settings change (only in graph mode)
+	// Update forces live when settings change (graph + circle modes)
 	$effect(() => {
 		const s = settingsStore.current;
 		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay; s.forceLeafRepulsion; s.nodeSize;
 
 		untrack(() => {
-			if (!sim || s.viewMode !== 'graph') return;
+			if (!sim || (s.viewMode !== 'graph' && s.viewMode !== 'circle')) return;
 			const linkForce = sim.force('link') as ReturnType<typeof forceLink> | undefined;
 			if (linkForce) {
 				linkForce.distance(s.forceLinkDistance).strength(s.forceLinkStrength);
@@ -303,20 +374,34 @@
 		vscale = ns;
 	}
 
+	// ---- Circle-constrained position helper ----
+	function projectToCircle(id: string, worldX: number, worldY: number): { x: number; y: number } | null {
+		const r = circleNodeRadius.get(id);
+		if (r == null || r === 0) return null; // root stays put
+		const angle = Math.atan2(worldY, worldX);
+		return { x: r * Math.cos(angle), y: r * Math.sin(angle) };
+	}
+
 	// ---- Pointer events (pan + drag) ----
 	function onDown(e: PointerEvent) {
 		const t = e.target as HTMLElement;
 		if (t.closest('button, textarea, input, select, a')) return;
 
 		const nodeEl = t.closest('[data-node-id]') as HTMLElement | null;
+		const mode = settingsStore.current.viewMode;
 
-		if (nodeEl && settingsStore.current.viewMode === 'graph') {
+		if (nodeEl && (mode === 'graph' || mode === 'circle')) {
 			dragId = nodeEl.dataset.nodeId!;
 			const pos = clientToWorld(e.clientX, e.clientY);
 			const sn = simNodeMap.get(dragId);
 			if (sn) {
-				sn.fx = pos.x;
-				sn.fy = pos.y;
+				if (mode === 'circle') {
+					const cp = projectToCircle(dragId, pos.x, pos.y);
+					if (cp) { sn.fx = cp.x; sn.fy = cp.y; }
+				} else {
+					sn.fx = pos.x;
+					sn.fy = pos.y;
+				}
 				sim?.alpha(0.3).restart();
 			}
 		} else if (!nodeEl) {
@@ -334,8 +419,13 @@
 			const pos = clientToWorld(e.clientX, e.clientY);
 			const sn = simNodeMap.get(dragId);
 			if (sn) {
-				sn.fx = pos.x;
-				sn.fy = pos.y;
+				if (settingsStore.current.viewMode === 'circle') {
+					const cp = projectToCircle(dragId, pos.x, pos.y);
+					if (cp) { sn.fx = cp.x; sn.fy = cp.y; }
+				} else {
+					sn.fx = pos.x;
+					sn.fy = pos.y;
+				}
 				sim?.alpha(0.3).restart();
 			}
 		} else if (isPanning) {
@@ -362,7 +452,8 @@
 
 	// ---- Hover pin (freeze hovered node in physics) ----
 	function onNodeEnter(id: string) {
-		if (settingsStore.current.viewMode !== 'graph') return;
+		const mode = settingsStore.current.viewMode;
+		if (mode !== 'graph' && mode !== 'circle') return;
 		hoveredId = id;
 		const sn = simNodeMap.get(id);
 		if (sn && sn.fx == null) {
@@ -445,6 +536,28 @@
 		class="absolute top-0 left-0 origin-top-left"
 		style="transform: translate({vx}px, {vy}px) scale({vscale})"
 	>
+		<!-- Cluster region layer (SVG) -->
+		<svg class="absolute top-0 left-0 overflow-visible pointer-events-none" width="0" height="0">
+			<ClusterRegions {positions} {viewLeft} {viewTop} {viewRight} {viewBottom} />
+		</svg>
+
+		<!-- Concentric circle guides (circle mode) -->
+		{#if settingsStore.current.viewMode === 'circle' && circleLayerRadii.length > 0}
+			<svg class="absolute top-0 left-0 overflow-visible pointer-events-none" width="0" height="0">
+				{#each circleLayerRadii as radius (radius)}
+					<circle
+						cx={0}
+						cy={0}
+						r={radius}
+						fill="none"
+						stroke="rgba(255,255,255,0.06)"
+						stroke-width={1}
+						stroke-dasharray="6 4"
+					/>
+				{/each}
+			</svg>
+		{/if}
+
 		<!-- Edge layer (SVG) -->
 		<svg class="absolute top-0 left-0 overflow-visible pointer-events-none" width="0" height="0">
 			{#each graphStore.edges as edge (edge.id)}

@@ -34,3 +34,22 @@ export function loadSettings<T>(): T | null {
 		return null;
 	}
 }
+
+const EMBEDDINGS_KEY = 'loomnodes:embeddings';
+
+export function saveEmbeddings(data: unknown): void {
+	try {
+		localStorage.setItem(EMBEDDINGS_KEY, JSON.stringify(data));
+	} catch {
+		// localStorage full or unavailable
+	}
+}
+
+export function loadEmbeddings<T>(): T | null {
+	try {
+		const raw = localStorage.getItem(EMBEDDINGS_KEY);
+		return raw ? (JSON.parse(raw) as T) : null;
+	} catch {
+		return null;
+	}
+}
