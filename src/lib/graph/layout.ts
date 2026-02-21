@@ -103,7 +103,7 @@ export function computeLayout(
 ): Map<string, { x: number; y: number }> {
 	const g = new dagre.graphlib.Graph();
 	g.setDefaultEdgeLabel(() => ({}));
-	g.setGraph({ rankdir: 'TB', ranksep: 100, nodesep: 60 });
+	g.setGraph({ rankdir: 'TB', ranksep: 60, nodesep: 20 });
 
 	for (const node of nodes) {
 		g.setNode(node.id, { width: nodeWidth, height: nodeHeight });
