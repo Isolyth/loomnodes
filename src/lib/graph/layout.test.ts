@@ -8,7 +8,8 @@ describe('computeLayout', () => {
 			[
 				{ source: 'a', target: 'b' },
 				{ source: 'a', target: 'c' }
-			]
+			],
+			280, 200
 		);
 		expect(positions.size).toBe(3);
 		expect(positions.get('a')).toBeDefined();
@@ -19,7 +20,8 @@ describe('computeLayout', () => {
 	it('positions are finite numbers', () => {
 		const positions = computeLayout(
 			[{ id: 'a' }, { id: 'b' }],
-			[{ source: 'a', target: 'b' }]
+			[{ source: 'a', target: 'b' }],
+			280, 200
 		);
 		for (const [, pos] of positions) {
 			expect(Number.isFinite(pos.x)).toBe(true);
@@ -28,7 +30,7 @@ describe('computeLayout', () => {
 	});
 
 	it('handles single node', () => {
-		const positions = computeLayout([{ id: 'a' }], []);
+		const positions = computeLayout([{ id: 'a' }], [], 280, 200);
 		expect(positions.size).toBe(1);
 	});
 
@@ -38,7 +40,8 @@ describe('computeLayout', () => {
 			[
 				{ source: 'a', target: 'b' },
 				{ source: 'a', target: 'c' }
-			]
+			],
+			280, 200
 		);
 		const a = positions.get('a')!;
 		const b = positions.get('b')!;
@@ -53,7 +56,8 @@ describe('computeLayout', () => {
 			[
 				{ source: 'a', target: 'b' },
 				{ source: 'a', target: 'c' }
-			]
+			],
+			280, 200
 		);
 		const b = positions.get('b')!;
 		const c = positions.get('c')!;

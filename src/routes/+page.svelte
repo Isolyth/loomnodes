@@ -45,6 +45,12 @@
 		fileInput.click();
 	}
 
+	function toggleViewMode() {
+		settingsStore.update({
+			viewMode: settingsStore.current.viewMode === 'graph' ? 'tree' : 'graph'
+		});
+	}
+
 	function handleFileSelected(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0];
 		if (!file) return;
@@ -109,6 +115,38 @@
 				<polyline points="17 8 12 3 7 8" />
 				<line x1="12" y1="3" x2="12" y2="15" />
 			</svg>
+		</button>
+
+		<!-- View Mode Toggle -->
+		<button
+			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
+			onclick={toggleViewMode}
+			title={settingsStore.current.viewMode === 'graph' ? 'Switch to tree view' : 'Switch to graph view'}
+		>
+			{#if settingsStore.current.viewMode === 'graph'}
+				<!-- Tree icon -->
+				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="9" y="2" width="6" height="4" rx="1" />
+					<rect x="2" y="18" width="6" height="4" rx="1" />
+					<rect x="9" y="18" width="6" height="4" rx="1" />
+					<rect x="16" y="18" width="6" height="4" rx="1" />
+					<line x1="12" y1="6" x2="12" y2="12" />
+					<line x1="5" y1="12" x2="19" y2="12" />
+					<line x1="5" y1="12" x2="5" y2="18" />
+					<line x1="12" y1="12" x2="12" y2="18" />
+					<line x1="19" y1="12" x2="19" y2="18" />
+				</svg>
+			{:else}
+				<!-- Graph icon -->
+				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<line x1="6" y1="6" x2="18" y2="8" />
+					<line x1="6" y1="6" x2="12" y2="18" />
+					<line x1="18" y1="8" x2="12" y2="18" />
+					<circle cx="6" cy="6" r="3" fill="currentColor" />
+					<circle cx="18" cy="8" r="3" fill="currentColor" />
+					<circle cx="12" cy="18" r="3" fill="currentColor" />
+				</svg>
+			{/if}
 		</button>
 
 		<!-- Generate All Leaves -->

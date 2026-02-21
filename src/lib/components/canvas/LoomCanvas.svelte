@@ -5,6 +5,7 @@
 	import LoomNode from './LoomNode.svelte';
 	import { graphStore } from '$lib/stores/graph.svelte.js';
 	import { settingsStore } from '$lib/stores/settings.svelte.js';
+	import { computeLayout } from '$lib/graph/layout.js';
 
 	// ---- Simulation types ----
 	interface SimNode extends SimulationNodeDatum {
@@ -45,11 +46,20 @@
 
 	let dragId: string | null = null;
 
-	// ---- Build / rebuild simulation on structure change ----
-	function rebuildSim() {
+	// ---- Build / rebuild layout on structure or mode change ----
+	function rebuildLayout() {
 		const nodes = graphStore.nodes;
 		const edges = graphStore.edges;
 		const s = settingsStore.current;
+
+		if (s.viewMode === 'tree') {
+			sim?.stop();
+			sim = null;
+			positions = computeLayout(nodes, edges, NODE_W, NODE_H);
+			return;
+		}
+
+		// Graph mode: D3-force simulation
 		const old = positions;
 
 		simNodes = nodes.map((n) => {
@@ -67,6 +77,9 @@
 
 		sim?.stop();
 
+		const leafIds = new Set(nodes.filter((n) => n.data.childIds.length === 0).map((n) => n.id));
+		const leafStrength = (d: SimNode) => leafIds.has(d.id) ? -s.forceLeafRepulsion : 0;
+
 		sim = forceSimulation<SimNode, SimLink>(simNodes)
 			.force(
 				'link',
@@ -79,6 +92,8 @@
 			.force('collide', forceCollide(s.nodeSize * 0.5).strength(0.8))
 			.force('x', forceX(0).strength(s.forceCenterStrength))
 			.force('y', forceY(0).strength(s.forceCenterStrength))
+			.force('leafX', forceX<SimNode>(0).strength(leafStrength))
+			.force('leafY', forceY<SimNode>(0).strength(leafStrength))
 			.alphaDecay(s.forceAlphaDecay)
 			.on('tick', () => {
 				const m = new Map<string, { x: number; y: number }>();
@@ -89,20 +104,21 @@
 			});
 	}
 
-	// Rebuild on structure change
+	// Rebuild on structure change or view mode change
 	$effect(() => {
 		graphStore.structureVersion;
-		untrack(() => rebuildSim());
+		settingsStore.current.viewMode;
+		untrack(() => rebuildLayout());
 	});
 
-	// Update forces live when settings change (without rebuilding nodes)
+	// Update forces live when settings change (only in graph mode)
 	$effect(() => {
 		const s = settingsStore.current;
 		// Touch all force settings to subscribe
-		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay; s.nodeSize;
+		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay; s.forceLeafRepulsion; s.nodeSize;
 
 		untrack(() => {
-			if (!sim) return;
+			if (!sim || s.viewMode !== 'graph') return;
 			const linkForce = sim.force('link') as ReturnType<typeof forceLink> | undefined;
 			if (linkForce) {
 				linkForce.distance(s.forceLinkDistance).strength(s.forceLinkStrength);
@@ -122,6 +138,17 @@
 			const yForce = sim.force('y') as ReturnType<typeof forceY> | undefined;
 			if (yForce) {
 				yForce.strength(s.forceCenterStrength);
+			}
+			const nodes = graphStore.nodes;
+			const leafIds = new Set(nodes.filter((n) => n.data.childIds.length === 0).map((n) => n.id));
+			const leafStrength = (d: SimNode) => leafIds.has(d.id) ? -s.forceLeafRepulsion : 0;
+			const leafXForce = sim.force('leafX') as ReturnType<typeof forceX<SimNode>> | undefined;
+			if (leafXForce) {
+				leafXForce.strength(leafStrength);
+			}
+			const leafYForce = sim.force('leafY') as ReturnType<typeof forceY<SimNode>> | undefined;
+			if (leafYForce) {
+				leafYForce.strength(leafStrength);
 			}
 			sim.alphaDecay(s.forceAlphaDecay);
 			sim.alpha(0.5).restart();
@@ -155,8 +182,8 @@
 
 		const nodeEl = t.closest('[data-node-id]') as HTMLElement | null;
 
-		if (nodeEl) {
-			// Start dragging a node
+		if (nodeEl && settingsStore.current.viewMode === 'graph') {
+			// Start dragging a node (graph mode only)
 			dragId = nodeEl.dataset.nodeId!;
 			const pos = clientToWorld(e.clientX, e.clientY);
 			const sn = simNodes.find((n) => n.id === dragId);
@@ -165,8 +192,8 @@
 				sn.fy = pos.y;
 				sim?.alpha(0.3).restart();
 			}
-		} else {
-			// Start panning
+		} else if (!nodeEl) {
+			// Start panning (on empty canvas)
 			isPanning = true;
 			panAnchorX = e.clientX;
 			panAnchorY = e.clientY;

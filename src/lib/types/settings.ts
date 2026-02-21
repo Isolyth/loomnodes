@@ -12,6 +12,7 @@ export interface LoomSettings {
 	maxParallelRequests: number;
 	maxLeafGenerations: number;
 	// Display
+	viewMode: 'graph' | 'tree';
 	nodeSize: number;
 	fontSize: number;
 	// Force simulation
@@ -20,6 +21,7 @@ export interface LoomSettings {
 	forceLinkStrength: number;
 	forceCenterStrength: number;
 	forceAlphaDecay: number;
+	forceLeafRepulsion: number;
 }
 
 export const DEFAULT_SETTINGS: LoomSettings = {
@@ -35,11 +37,13 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	numGenerations: 3,
 	maxParallelRequests: 5,
 	maxLeafGenerations: 10,
+	viewMode: 'graph',
 	nodeSize: 395,
 	fontSize: 14,
 	forceRepulsion: 600,
 	forceLinkDistance: 280,
 	forceLinkStrength: 0.7,
 	forceCenterStrength: 0.03,
-	forceAlphaDecay: 0.03
+	forceAlphaDecay: 0.03,
+	forceLeafRepulsion: 0.02
 };

@@ -345,6 +345,23 @@
 						/>
 					</div>
 
+					<!-- Leaf Repulsion -->
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceLeafRepulsion">
+							Leaf repulsion: {settings.forceLeafRepulsion}
+						</label>
+						<input
+							id="forceLeafRepulsion"
+							type="range"
+							min="0"
+							max="0.2"
+							step="0.005"
+							class="w-full accent-indigo-500"
+							value={settings.forceLeafRepulsion}
+							oninput={(e) => handleNumberChange('forceLeafRepulsion', e)}
+						/>
+					</div>
+
 					<!-- Settling Speed -->
 					<div>
 						<label class="block text-xs font-medium text-zinc-400 mb-1" for="forceAlphaDecay">
