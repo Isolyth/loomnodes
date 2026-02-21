@@ -19,6 +19,12 @@
 		target: string | SimNode;
 	}
 
+	interface Props {
+		resetKey?: number;
+	}
+
+	let { resetKey = 0 }: Props = $props();
+
 	let NODE_W = $derived(Math.round(settingsStore.current.nodeSize * 0.862));
 	let NODE_H = $derived(Math.round(settingsStore.current.nodeSize * 0.507));
 
@@ -46,7 +52,49 @@
 
 	let dragId: string | null = null;
 
+	// ---- Animation state ----
+	let animFrameId: number | null = null;
+	const ANIM_DURATION = 300; // ms
+
+	function animateTo(target: Map<string, { x: number; y: number }>) {
+		if (animFrameId != null) cancelAnimationFrame(animFrameId);
+
+		const from = new Map<string, { x: number; y: number }>();
+		for (const [id, pos] of target) {
+			const old = positions.get(id);
+			from.set(id, old ? { ...old } : { ...pos });
+		}
+
+		const start = performance.now();
+
+		function tick(now: number) {
+			const t = Math.min((now - start) / ANIM_DURATION, 1);
+			// ease-out cubic
+			const e = 1 - (1 - t) * (1 - t) * (1 - t);
+
+			const m = new Map<string, { x: number; y: number }>();
+			for (const [id, to] of target) {
+				const f = from.get(id) ?? to;
+				m.set(id, {
+					x: f.x + (to.x - f.x) * e,
+					y: f.y + (to.y - f.y) * e
+				});
+			}
+			positions = m;
+
+			if (t < 1) {
+				animFrameId = requestAnimationFrame(tick);
+			} else {
+				animFrameId = null;
+			}
+		}
+
+		animFrameId = requestAnimationFrame(tick);
+	}
+
 	// ---- Build / rebuild layout on structure or mode change ----
+	let prevViewMode: 'graph' | 'tree' = 'graph';
+
 	function rebuildLayout() {
 		const nodes = graphStore.nodes;
 		const edges = graphStore.edges;
@@ -55,15 +103,67 @@
 		if (s.viewMode === 'tree') {
 			sim?.stop();
 			sim = null;
-			positions = computeLayout(nodes, edges, NODE_W, NODE_H);
+
+			const newPositions = computeLayout(nodes, edges, NODE_W, NODE_H);
+			const wasModeSwitch = prevViewMode !== 'tree';
+			prevViewMode = 'tree';
+
+			if (wasModeSwitch) {
+				// Animate from current graph positions to tree positions
+				animateTo(newPositions);
+			} else {
+				// Structure change within tree mode — stabilize camera on root
+				const root = nodes.find((n) => n.data.isRoot);
+				if (root) {
+					const oldRoot = positions.get(root.id);
+					const newRoot = newPositions.get(root.id);
+					if (oldRoot && newRoot) {
+						vx += (oldRoot.x - newRoot.x) * vscale;
+						vy += (oldRoot.y - newRoot.y) * vscale;
+					}
+				}
+				animateTo(newPositions);
+			}
 			return;
+		}
+
+		prevViewMode = 'graph';
+		if (animFrameId != null) {
+			cancelAnimationFrame(animFrameId);
+			animFrameId = null;
 		}
 
 		// Graph mode: D3-force simulation
 		const old = positions;
 
+		// When old positions are empty (reset), walk tree top-down so children
+		// spawn near their already-placed parents instead of all at origin.
+		const seed = new Map<string, { x: number; y: number }>();
+		if (old.size === 0) {
+			const queue: string[] = [];
+			for (const n of nodes) {
+				if (n.data.isRoot) {
+					seed.set(n.id, { x: 0, y: 0 });
+					queue.push(n.id);
+				}
+			}
+			while (queue.length > 0) {
+				const id = queue.shift()!;
+				const parent = seed.get(id)!;
+				const node = nodes.find((n) => n.id === id);
+				if (!node) continue;
+				for (const childId of node.data.childIds) {
+					seed.set(childId, {
+						x: parent.x + (Math.random() - 0.5) * 60,
+						y: parent.y + 250
+					});
+					queue.push(childId);
+				}
+			}
+		}
+
 		simNodes = nodes.map((n) => {
-			const prev = old.get(n.id);
+			const prev = old.get(n.id) ?? seed.get(n.id);
 			const parentPos = n.data.parentId ? old.get(n.data.parentId) : null;
 			return {
 				id: n.id,
@@ -104,11 +204,26 @@
 			});
 	}
 
-	// Rebuild on structure change or view mode change
+	// Rebuild on structure change, view mode change, or position reset
+	let lastResetKey = 0;
 	$effect(() => {
 		graphStore.structureVersion;
 		settingsStore.current.viewMode;
-		untrack(() => rebuildLayout());
+		const rk = resetKey;
+		untrack(() => {
+			if (rk !== lastResetKey) {
+				lastResetKey = rk;
+				positions = new Map();
+				// Re-center viewport
+				if (container) {
+					const rect = container.getBoundingClientRect();
+					vx = rect.width / 2;
+					vy = rect.height / 3;
+					vscale = 1;
+				}
+			}
+			rebuildLayout();
+		});
 	});
 
 	// Update forces live when settings change (only in graph mode)
@@ -252,6 +367,7 @@
 
 	onDestroy(() => {
 		sim?.stop();
+		if (animFrameId != null) cancelAnimationFrame(animFrameId);
 	});
 </script>
 

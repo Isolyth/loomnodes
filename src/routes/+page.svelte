@@ -7,6 +7,7 @@
 	import { generationStore } from '$lib/stores/generation.svelte.js';
 
 	let settingsOpen = $state(false);
+	let resetKey = $state(0);
 
 	let totalNodes = $derived(graphStore.nodes.length);
 	let leafNodes = $derived(graphStore.nodes.filter((n) => n.data.childIds.length === 0));
@@ -68,7 +69,7 @@
 </script>
 
 <div class="relative h-full w-full">
-	<LoomCanvas />
+	<LoomCanvas {resetKey} />
 
 	<!-- Stats counters -->
 	<div class="fixed top-4 left-4 z-30 rounded-lg bg-zinc-800/80 backdrop-blur-sm border border-zinc-700 px-3 py-2 shadow-lg">
@@ -148,6 +149,20 @@
 				</svg>
 			{/if}
 		</button>
+
+		<!-- Reset Positions (graph mode only) -->
+		{#if settingsStore.current.viewMode === 'graph'}
+			<button
+				class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
+				onclick={() => resetKey++}
+				title="Reset node positions"
+			>
+				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<polyline points="1 4 1 10 7 10" />
+					<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+				</svg>
+			</button>
+		{/if}
 
 		<!-- Generate All Leaves -->
 		<button
