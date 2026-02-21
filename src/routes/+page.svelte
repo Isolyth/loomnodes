@@ -13,12 +13,20 @@
 	let leafNodes = $derived(graphStore.nodes.filter((n) => n.data.childIds.length === 0));
 	let leafCount = $derived(leafNodes.length);
 	let nonLeafCount = $derived(totalNodes - leafCount);
-	let totalWords = $derived(
-		graphStore.nodes.reduce((sum, n) => {
-			const words = n.data.text.trim().split(/\s+/).filter(Boolean);
-			return sum + words.length;
-		}, 0)
-	);
+
+	let totalWords = $state(0);
+	let wordsTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$effect(() => {
+		const currentNodes = graphStore.nodes;
+		if (wordsTimer !== null) clearTimeout(wordsTimer);
+		wordsTimer = setTimeout(() => {
+			totalWords = currentNodes.reduce((sum, n) => {
+				const words = n.data.text.trim().split(/\s+/).filter(Boolean);
+				return sum + words.length;
+			}, 0);
+		}, 300);
+	});
 
 	onMount(() => {
 		settingsStore.init();

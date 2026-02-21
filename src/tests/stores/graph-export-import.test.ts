@@ -187,19 +187,23 @@ describe('graphStore export/import', () => {
 		expect(parsed.nodes[0].data.isRoot).toBe(true);
 	});
 
-	it('import updates structureVersion', () => {
+	it('import updates structureVersion', async () => {
 		graphStore.init();
+		await new Promise<void>((r) => queueMicrotask(() => r()));
 		const versionBefore = graphStore.structureVersion;
 
 		const rootId = graphStore.nodes[0].id;
 		graphStore.addChild(rootId, 'child', 0);
+		await new Promise<void>((r) => queueMicrotask(() => r()));
 		const json = graphStore.exportGraph();
 
 		graphStore.clearAll();
+		await new Promise<void>((r) => queueMicrotask(() => r()));
 		const versionAfterClear = graphStore.structureVersion;
 		expect(versionAfterClear).toBeGreaterThan(versionBefore);
 
 		graphStore.importGraph(json);
+		await new Promise<void>((r) => queueMicrotask(() => r()));
 		expect(graphStore.structureVersion).toBeGreaterThan(versionAfterClear);
 	});
 });

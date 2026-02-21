@@ -17,12 +17,65 @@ function createGraphStore() {
 	let nodeDataMap = $state.raw<Map<string, LoomNodeData>>(new Map());
 	let structureVersion = $state(0);
 
+	// Fast index lookup: id -> array index (non-reactive, rebuilt alongside nodeDataMap)
+	let nodeIndexMap = new Map<string, number>();
+
 	function rebuildIndex() {
-		const map = new Map<string, LoomNodeData>();
-		for (const node of nodes) {
-			map.set(node.id, node.data);
+		const dataMap = new Map<string, LoomNodeData>();
+		const idxMap = new Map<string, number>();
+		for (let i = 0; i < nodes.length; i++) {
+			dataMap.set(nodes[i].id, nodes[i].data);
+			idxMap.set(nodes[i].id, i);
 		}
-		nodeDataMap = map;
+		nodeDataMap = dataMap;
+		nodeIndexMap = idxMap;
+	}
+
+	// --- Debounced persistence ---
+	let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function persist() {
+		if (persistTimer !== null) clearTimeout(persistTimer);
+		persistTimer = setTimeout(() => {
+			persistTimer = null;
+			saveGraph({ nodes, edges });
+		}, 500);
+	}
+
+	function persistImmediate() {
+		if (persistTimer !== null) {
+			clearTimeout(persistTimer);
+			persistTimer = null;
+		}
+		saveGraph({ nodes, edges });
+	}
+
+	// --- Coalesced structureVersion ---
+	let structureScheduled = false;
+
+	function incrementStructure() {
+		if (!structureScheduled) {
+			structureScheduled = true;
+			queueMicrotask(() => {
+				structureScheduled = false;
+				structureVersion++;
+			});
+		}
+	}
+
+	// --- Patched single-node update (avoids full .map + rebuildIndex) ---
+	function patchNode(nodeId: string, patchData: Partial<LoomNodeData>) {
+		const idx = nodeIndexMap.get(nodeId);
+		if (idx === undefined) return;
+		const node = nodes[idx];
+		const updatedNode = { ...node, data: { ...node.data, ...patchData } };
+		const newNodes = nodes.slice();
+		newNodes[idx] = updatedNode;
+		nodes = newNodes;
+		// Patch nodeDataMap for just this entry
+		const newMap = new Map(nodeDataMap);
+		newMap.set(nodeId, updatedNode.data);
+		nodeDataMap = newMap;
 	}
 
 	function createRootNode(): Node<LoomNodeData> {
@@ -60,11 +113,7 @@ function createGraphStore() {
 			edges = [];
 		}
 		rebuildIndex();
-		structureVersion++;
-	}
-
-	function persist() {
-		saveGraph({ nodes, edges });
+		incrementStructure();
 	}
 
 	function addChild(parentId: string, text: string, generatedTextStart: number = 0): string {
@@ -106,8 +155,8 @@ function createGraphStore() {
 		nodes = [...updatedNodes, childNode];
 		edges = [...edges, newEdge];
 		rebuildIndex();
-		persist();
-		structureVersion++;
+		persistImmediate();
+		incrementStructure();
 		return childId;
 	}
 
@@ -151,15 +200,12 @@ function createGraphStore() {
 		edges = [...edges, newEdge];
 		rebuildIndex();
 		persist();
-		structureVersion++;
+		incrementStructure();
 		return childId;
 	}
 
 	function updateTextSilent(nodeId: string, text: string) {
-		nodes = nodes.map((n) =>
-			n.id === nodeId ? { ...n, data: { ...n.data, text } } : n
-		);
-		rebuildIndex();
+		patchNode(nodeId, { text });
 	}
 
 	function deleteNode(nodeId: string) {
@@ -189,23 +235,17 @@ function createGraphStore() {
 
 		edges = edges.filter((e) => !toDelete.has(e.source) && !toDelete.has(e.target));
 		rebuildIndex();
-		persist();
-		structureVersion++;
+		persistImmediate();
+		incrementStructure();
 	}
 
 	function updateText(nodeId: string, text: string) {
-		nodes = nodes.map((n) =>
-			n.id === nodeId ? { ...n, data: { ...n.data, text } } : n
-		);
-		rebuildIndex();
+		patchNode(nodeId, { text });
 		persist();
 	}
 
 	function setGenerating(nodeId: string, isGenerating: boolean) {
-		nodes = nodes.map((n) =>
-			n.id === nodeId ? { ...n, data: { ...n.data, isGenerating } } : n
-		);
-		rebuildIndex();
+		patchNode(nodeId, { isGenerating });
 	}
 
 	/** Update positions without persisting — used by the live simulation on each tick. */
@@ -248,8 +288,8 @@ function createGraphStore() {
 		}));
 		edges = data.edges;
 		rebuildIndex();
-		persist();
-		structureVersion++;
+		persistImmediate();
+		incrementStructure();
 	}
 
 	function clearAll() {
@@ -257,8 +297,8 @@ function createGraphStore() {
 		nodes = [root];
 		edges = [];
 		rebuildIndex();
-		persist();
-		structureVersion++;
+		persistImmediate();
+		incrementStructure();
 	}
 
 	return {
