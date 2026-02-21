@@ -1,6 +1,10 @@
 import { graphStore } from './graph.svelte.js';
 import { settingsStore } from './settings.svelte.js';
-import { fetchCompletionStream, CompletionServiceError } from '$lib/services/completion.js';
+import {
+	fetchCompletionStreamBatch,
+	CompletionServiceError
+} from '$lib/services/completion.js';
+import type { BatchStreamRequest } from '$lib/services/completion.js';
 
 function shuffle<T>(arr: T[]): T[] {
 	const a = [...arr];
@@ -15,74 +19,99 @@ function createGenerationStore() {
 	let activeRequests = $state(0);
 	let isBulkGenerating = $state(false);
 
-	function generateSingleCompletion(
-		parentId: string,
-		prompt: string,
+	async function runBatchGeneration(
+		entries: { parentId: string; prompt: string; count: number }[],
 		settings: typeof settingsStore.current
 	): Promise<void> {
-		return new Promise<void>((resolve) => {
-			const childId = graphStore.addChildStreaming(parentId, prompt, prompt.length);
-			if (!childId) {
-				resolve();
-				return;
-			}
+		const requests: BatchStreamRequest[] = [];
+		const buffers = new Map<string, string>();
+		const prompts = new Map<string, string>();
+		const rafScheduled = new Map<string, boolean>();
+		const completed = new Set<string>();
 
-			let buffer = prompt;
-			let rafScheduled = false;
-
-			function flushToStore() {
-				rafScheduled = false;
-				graphStore.updateTextSilent(childId, buffer);
-			}
-
-			activeRequests++;
-
-			fetchCompletionStream(prompt, settings, {
-				onToken(token: string) {
-					buffer += token;
-					if (!rafScheduled) {
-						rafScheduled = true;
-						requestAnimationFrame(flushToStore);
-					}
-				},
-				onDone() {
-					// Cancel any pending RAF and do a final flush
-					rafScheduled = false;
-					graphStore.updateTextSilent(childId, buffer);
-					graphStore.setGenerating(childId, false);
-					graphStore.persist();
-					activeRequests--;
-					resolve();
-				},
-				onError(error: Error) {
-					rafScheduled = false;
-					// Keep partial text if any was received, append error marker
-					if (buffer.length > prompt.length) {
-						buffer += `\n[Error: ${error.message}]`;
-					} else {
-						buffer = `[Error: ${error.message}]`;
-					}
-					graphStore.updateTextSilent(childId, buffer);
-					graphStore.setGenerating(childId, false);
-					graphStore.persist();
-					activeRequests--;
-					resolve();
+		for (const entry of entries) {
+			for (let i = 0; i < entry.count; i++) {
+				const childId = graphStore.addChildStreaming(
+					entry.parentId,
+					entry.prompt,
+					entry.prompt.length
+				);
+				if (childId) {
+					requests.push({ id: childId, prompt: entry.prompt });
+					buffers.set(childId, entry.prompt);
+					prompts.set(childId, entry.prompt);
+					rafScheduled.set(childId, false);
 				}
-			}).catch((err) => {
-				// Handle errors thrown before streaming starts (e.g. fetch failure)
-				const message =
-					err instanceof CompletionServiceError
-						? err.message
-						: err instanceof Error
-							? err.message
-							: 'Unknown error';
-				graphStore.updateTextSilent(childId, `[Error: ${message}]`);
-				graphStore.setGenerating(childId, false);
-				graphStore.persist();
-				activeRequests--;
-				resolve();
+			}
+		}
+
+		if (requests.length === 0) return;
+
+		activeRequests += requests.length;
+
+		try {
+			await fetchCompletionStreamBatch(requests, settings, {
+				onToken(id: string, token: string) {
+					const buf = buffers.get(id);
+					if (buf == null) return;
+					buffers.set(id, buf + token);
+					if (!rafScheduled.get(id)) {
+						rafScheduled.set(id, true);
+						requestAnimationFrame(() => {
+							rafScheduled.set(id, false);
+							const current = buffers.get(id);
+							if (current != null) {
+								graphStore.updateTextSilent(id, current);
+							}
+						});
+					}
+				},
+				onDone(id: string) {
+					if (completed.has(id)) return;
+					completed.add(id);
+					rafScheduled.set(id, false);
+					const buf = buffers.get(id);
+					if (buf != null) {
+						graphStore.updateTextSilent(id, buf);
+					}
+					graphStore.setGenerating(id, false);
+					graphStore.persist();
+					activeRequests--;
+				},
+				onError(id: string, error: Error) {
+					if (completed.has(id)) return;
+					completed.add(id);
+					rafScheduled.set(id, false);
+					const buf = buffers.get(id) ?? '';
+					const prompt = prompts.get(id) ?? '';
+					if (buf.length > prompt.length) {
+						graphStore.updateTextSilent(id, buf + `\n[Error: ${error.message}]`);
+					} else {
+						graphStore.updateTextSilent(id, `[Error: ${error.message}]`);
+					}
+					graphStore.setGenerating(id, false);
+					graphStore.persist();
+					activeRequests--;
+				}
 			});
-		});
+		} catch (err) {
+			// Handle batch-level errors (connection failure, etc.)
+			const message =
+				err instanceof CompletionServiceError
+					? err.message
+					: err instanceof Error
+						? err.message
+						: 'Unknown error';
+			for (const req of requests) {
+				if (!completed.has(req.id)) {
+					completed.add(req.id);
+					graphStore.updateTextSilent(req.id, `[Error: ${message}]`);
+					graphStore.setGenerating(req.id, false);
+					activeRequests--;
+				}
+			}
+			graphStore.persist();
+		}
 	}
 
 	async function generateForNode(nodeId: string): Promise<void> {
@@ -98,25 +127,11 @@ function createGenerationStore() {
 		}
 
 		graphStore.setGenerating(nodeId, true);
-		const numGenerations = settings.numGenerations;
-		const maxParallel = settings.maxParallelRequests;
 
-		const tasks: (() => Promise<void>)[] = [];
-		for (let i = 0; i < numGenerations; i++) {
-			tasks.push(() => generateSingleCompletion(nodeId, prompt, settings));
-		}
-
-		// Run with concurrency limit
-		const executing = new Set<Promise<void>>();
-		for (const task of tasks) {
-			const p = task();
-			executing.add(p);
-			p.finally(() => executing.delete(p));
-			if (executing.size >= maxParallel) {
-				await Promise.race(executing);
-			}
-		}
-		await Promise.all(executing);
+		await runBatchGeneration(
+			[{ parentId: nodeId, prompt, count: settings.numGenerations }],
+			settings
+		);
 
 		graphStore.setGenerating(nodeId, false);
 	}
@@ -140,19 +155,33 @@ function createGenerationStore() {
 
 		isBulkGenerating = true;
 		try {
-			await Promise.all(
-				leaves.map((leaf) =>
-					generateForNode(leaf.id).catch(() => {})
-				)
-			);
+			for (const leaf of leaves) {
+				graphStore.setGenerating(leaf.id, true);
+			}
+
+			const entries = leaves.map((leaf) => ({
+				parentId: leaf.id,
+				prompt: graphStore.getPrompt(leaf.id),
+				count: settings.numGenerations
+			}));
+
+			await runBatchGeneration(entries, settings);
+
+			for (const leaf of leaves) {
+				graphStore.setGenerating(leaf.id, false);
+			}
 		} finally {
 			isBulkGenerating = false;
 		}
 	}
 
 	return {
-		get activeRequests() { return activeRequests; },
-		get isBulkGenerating() { return isBulkGenerating; },
+		get activeRequests() {
+			return activeRequests;
+		},
+		get isBulkGenerating() {
+			return isBulkGenerating;
+		},
 		generateForNode,
 		generateAllLeaves
 	};

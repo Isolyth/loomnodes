@@ -188,3 +188,109 @@ export async function fetchCompletionStream(
 		callbacks.onError(err instanceof Error ? err : new Error(String(err)));
 	}
 }
+
+export interface BatchStreamRequest {
+	id: string;
+	prompt: string;
+}
+
+export interface BatchStreamCallbacks {
+	onToken: (id: string, token: string) => void;
+	onDone: (id: string) => void;
+	onError: (id: string, error: Error) => void;
+}
+
+export async function fetchCompletionStreamBatch(
+	requests: BatchStreamRequest[],
+	settings: LoomSettings,
+	callbacks: BatchStreamCallbacks,
+	signal?: AbortSignal
+): Promise<void> {
+	const body: Record<string, unknown> = {
+		requests,
+		apiBaseUrl: settings.apiBaseUrl,
+		apiKey: settings.apiKey,
+		model: settings.model,
+		max_tokens: settings.maxTokens,
+		temperature: settings.temperature,
+		top_p: settings.topP,
+		frequency_penalty: settings.frequencyPenalty,
+		presence_penalty: settings.presencePenalty,
+		maxParallel: settings.maxParallelRequests
+	};
+
+	if (settings.provider) {
+		body.provider = {
+			only: [settings.provider],
+			allow_fallbacks: false
+		};
+	}
+
+	const response = await fetch('/api/completions/batch', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body),
+		signal
+	});
+
+	if (!response.ok) {
+		let message = `API error: ${response.status}`;
+		try {
+			const err = (await response.json()) as CompletionError;
+			message = err.error.message;
+		} catch {
+			// use default message
+		}
+		throw new CompletionServiceError(message, response.status);
+	}
+
+	if (!response.body) {
+		throw new CompletionServiceError('No response body for batch stream', 200);
+	}
+
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+
+			buffer += decoder.decode(value, { stream: true });
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? '';
+
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (!trimmed || trimmed.startsWith(':')) continue;
+				if (trimmed === 'data: [DONE]') return;
+
+				if (trimmed.startsWith('data: ')) {
+					try {
+						const event = JSON.parse(trimmed.slice(6));
+						switch (event.type) {
+							case 'token':
+								callbacks.onToken(event.id, event.text);
+								break;
+							case 'done':
+								callbacks.onDone(event.id);
+								break;
+							case 'error':
+								callbacks.onError(
+									event.id,
+									new Error(event.text || 'Unknown error')
+								);
+								break;
+						}
+					} catch {
+						// skip malformed
+					}
+				}
+			}
+		}
+	} catch (err) {
+		if (signal?.aborted) return;
+		throw err;
+	}
+}
