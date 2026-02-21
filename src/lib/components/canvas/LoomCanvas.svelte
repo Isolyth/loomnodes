@@ -33,12 +33,25 @@
 	let vy = $state(0);
 	let vscale = $state(1);
 
+	// ---- Container dimensions (for viewport culling) ----
+	let containerW = $state(0);
+	let containerH = $state(0);
+
+	// ---- Viewport bounds in world coordinates (with margin for smooth pop-in) ----
+	const CULL_MARGIN = 100;
+	let viewLeft = $derived((-vx / vscale) - CULL_MARGIN);
+	let viewTop = $derived((-vy / vscale) - CULL_MARGIN);
+	let viewRight = $derived(((containerW - vx) / vscale) + CULL_MARGIN);
+	let viewBottom = $derived(((containerH - vy) / vscale) + CULL_MARGIN);
+
 	// ---- Positions coming out of d3-force ----
 	let positions = $state.raw<Map<string, { x: number; y: number }>>(new Map());
 
 	// ---- Simulation state ----
 	let sim: Simulation<SimNode, SimLink> | null = null;
 	let simNodes: SimNode[] = [];
+	// Fast lookup for drag operations
+	let simNodeMap = new Map<string, SimNode>();
 
 	// ---- Refs ----
 	let container: HTMLDivElement;
@@ -109,10 +122,8 @@
 			prevViewMode = 'tree';
 
 			if (wasModeSwitch) {
-				// Animate from current graph positions to tree positions
 				animateTo(newPositions);
 			} else {
-				// Structure change within tree mode — stabilize camera on root
 				const root = nodes.find((n) => n.data.isRoot);
 				if (root) {
 					const oldRoot = positions.get(root.id);
@@ -136,8 +147,6 @@
 		// Graph mode: D3-force simulation
 		const old = positions;
 
-		// When old positions are empty (reset), walk tree top-down so children
-		// spawn near their already-placed parents instead of all at origin.
 		const seed = new Map<string, { x: number; y: number }>();
 		if (old.size === 0) {
 			const queue: string[] = [];
@@ -172,6 +181,10 @@
 				...(n.data.isRoot ? { fx: 0, fy: 0 } : {})
 			} satisfies SimNode;
 		});
+
+		// Rebuild simNode lookup map
+		simNodeMap = new Map<string, SimNode>();
+		for (const sn of simNodes) simNodeMap.set(sn.id, sn);
 
 		const simLinks: SimLink[] = edges.map((e) => ({ source: e.source, target: e.target }));
 
@@ -214,7 +227,6 @@
 			if (rk !== lastResetKey) {
 				lastResetKey = rk;
 				positions = new Map();
-				// Re-center viewport
 				if (container) {
 					const rect = container.getBoundingClientRect();
 					vx = rect.width / 2;
@@ -229,7 +241,6 @@
 	// Update forces live when settings change (only in graph mode)
 	$effect(() => {
 		const s = settingsStore.current;
-		// Touch all force settings to subscribe
 		s.forceRepulsion; s.forceLinkDistance; s.forceLinkStrength; s.forceCenterStrength; s.forceAlphaDecay; s.forceLeafRepulsion; s.nodeSize;
 
 		untrack(() => {
@@ -283,7 +294,6 @@
 		const factor = e.deltaY > 0 ? 0.9 : 1.1;
 		const ns = Math.min(Math.max(vscale * factor, 0.05), 4);
 
-		// Zoom toward cursor
 		vx = mx - ((mx - vx) * ns) / vscale;
 		vy = my - ((my - vy) * ns) / vscale;
 		vscale = ns;
@@ -291,24 +301,21 @@
 
 	// ---- Pointer events (pan + drag) ----
 	function onDown(e: PointerEvent) {
-		// Ignore if on interactive element
 		const t = e.target as HTMLElement;
 		if (t.closest('button, textarea, input, select, a')) return;
 
 		const nodeEl = t.closest('[data-node-id]') as HTMLElement | null;
 
 		if (nodeEl && settingsStore.current.viewMode === 'graph') {
-			// Start dragging a node (graph mode only)
 			dragId = nodeEl.dataset.nodeId!;
 			const pos = clientToWorld(e.clientX, e.clientY);
-			const sn = simNodes.find((n) => n.id === dragId);
+			const sn = simNodeMap.get(dragId);
 			if (sn) {
 				sn.fx = pos.x;
 				sn.fy = pos.y;
 				sim?.alpha(0.3).restart();
 			}
 		} else if (!nodeEl) {
-			// Start panning (on empty canvas)
 			isPanning = true;
 			panAnchorX = e.clientX;
 			panAnchorY = e.clientY;
@@ -321,7 +328,7 @@
 	function onMove(e: PointerEvent) {
 		if (dragId) {
 			const pos = clientToWorld(e.clientX, e.clientY);
-			const sn = simNodes.find((n) => n.id === dragId);
+			const sn = simNodeMap.get(dragId);
 			if (sn) {
 				sn.fx = pos.x;
 				sn.fy = pos.y;
@@ -335,7 +342,7 @@
 
 	function onUp(e: PointerEvent) {
 		if (dragId) {
-			const sn = simNodes.find((n) => n.id === dragId);
+			const sn = simNodeMap.get(dragId);
 			const nd = graphStore.nodes.find((n) => n.id === dragId);
 			if (sn && nd && !nd.data.isRoot) {
 				sn.fx = null;
@@ -358,16 +365,29 @@
 		};
 	}
 
-	// Center viewport on mount
+	// Center viewport on mount + track container size
+	let resizeObserver: ResizeObserver | null = null;
+
 	onMount(() => {
 		const rect = container.getBoundingClientRect();
 		vx = rect.width / 2;
 		vy = rect.height / 3;
+		containerW = rect.width;
+		containerH = rect.height;
+
+		resizeObserver = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				containerW = entry.contentRect.width;
+				containerH = entry.contentRect.height;
+			}
+		});
+		resizeObserver.observe(container);
 	});
 
 	onDestroy(() => {
 		sim?.stop();
 		if (animFrameId != null) cancelAnimationFrame(animFrameId);
+		resizeObserver?.disconnect();
 	});
 </script>
 
@@ -402,7 +422,10 @@
 			{#each graphStore.edges as edge (edge.id)}
 				{@const sp = positions.get(edge.source)}
 				{@const tp = positions.get(edge.target)}
-				{#if sp && tp}
+				{#if sp && tp && (
+					(sp.x >= viewLeft && sp.x <= viewRight && sp.y >= viewTop && sp.y <= viewBottom) ||
+					(tp.x >= viewLeft && tp.x <= viewRight && tp.y >= viewTop && tp.y <= viewBottom)
+				)}
 					<line
 						x1={sp.x}
 						y1={sp.y}
@@ -418,7 +441,7 @@
 		<!-- Node layer -->
 		{#each graphStore.nodes as node (node.id)}
 			{@const pos = positions.get(node.id)}
-			{#if pos}
+			{#if pos && pos.x >= viewLeft - NODE_W && pos.x <= viewRight + NODE_W && pos.y >= viewTop - NODE_H && pos.y <= viewBottom + NODE_H}
 				<div
 					class="absolute"
 					style="transform: translate({pos.x - NODE_W / 2}px, {pos.y - NODE_H / 2}px)"
