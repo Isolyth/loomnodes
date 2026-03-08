@@ -37,6 +37,10 @@ export interface LoomSettings {
 	// Regions
 	showRegions: boolean;
 	regionOpacity: number;
+	// Auto-loom
+	autoLoom: boolean;
+	autoLoomCooldown: number;   // tokens between split checks
+	autoLoomThreshold: number;  // min probability % for alt token to trigger split
 }
 
 export const DEFAULT_SETTINGS: LoomSettings = {
@@ -72,5 +76,8 @@ export const DEFAULT_SETTINGS: LoomSettings = {
 	dbscanMinPoints: 2,
 	qualityThreshold: 0.15,
 	showRegions: true,
-	regionOpacity: 0.08
+	regionOpacity: 0.08,
+	autoLoom: false,
+	autoLoomCooldown: 10,
+	autoLoomThreshold: 20
 };

@@ -249,6 +249,58 @@
 				<p class="text-xs text-zinc-500 mt-1">Max leaves to generate for when using "Generate All Leaves".</p>
 			</div>
 
+			<!-- Auto-Loom -->
+			<div class="border-t border-zinc-700 pt-4">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Auto-Loom</h3>
+
+				<div class="space-y-4">
+					<div class="flex items-center gap-2">
+						<input
+							id="autoLoom"
+							type="checkbox"
+							class="rounded border-zinc-700 bg-zinc-800 accent-indigo-500"
+							checked={settings.autoLoom}
+							onchange={(e) => handleChange('autoLoom', (e.target as HTMLInputElement).checked)}
+						/>
+						<label class="text-xs text-zinc-400" for="autoLoom">Enable auto-loom</label>
+					</div>
+
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="autoLoomCooldown">
+							Cooldown: {settings.autoLoomCooldown} tokens
+						</label>
+						<input
+							id="autoLoomCooldown"
+							type="range"
+							min="1"
+							max="50"
+							step="1"
+							class="w-full accent-indigo-500"
+							value={settings.autoLoomCooldown}
+							oninput={(e) => handleNumberChange('autoLoomCooldown', e)}
+						/>
+						<p class="text-xs text-zinc-500 mt-1">Tokens between split checks. Lower = more splits.</p>
+					</div>
+
+					<div>
+						<label class="block text-xs font-medium text-zinc-400 mb-1" for="autoLoomThreshold">
+							Threshold: {settings.autoLoomThreshold}%
+						</label>
+						<input
+							id="autoLoomThreshold"
+							type="range"
+							min="1"
+							max="80"
+							step="1"
+							class="w-full accent-indigo-500"
+							value={settings.autoLoomThreshold}
+							oninput={(e) => handleNumberChange('autoLoomThreshold', e)}
+						/>
+						<p class="text-xs text-zinc-500 mt-1">Min probability for an alternative token to trigger a branch.</p>
+					</div>
+				</div>
+			</div>
+
 			<!-- Display -->
 			<div class="border-t border-zinc-700 pt-4">
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Display</h3>

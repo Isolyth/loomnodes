@@ -231,6 +231,31 @@
 			{/if}
 		</button>
 
+		<!-- Auto-Loom Toggle -->
+		<button
+			class="rounded-lg border p-2.5 shadow-lg transition-colors"
+			class:bg-indigo-600={settingsStore.current.autoLoom}
+			class:border-indigo-500={settingsStore.current.autoLoom}
+			class:text-indigo-100={settingsStore.current.autoLoom}
+			class:hover:bg-indigo-500={settingsStore.current.autoLoom}
+			class:bg-zinc-800={!settingsStore.current.autoLoom}
+			class:border-zinc-700={!settingsStore.current.autoLoom}
+			class:text-zinc-400={!settingsStore.current.autoLoom}
+			class:hover:text-zinc-100={!settingsStore.current.autoLoom}
+			class:hover:bg-zinc-700={!settingsStore.current.autoLoom}
+			onclick={() => settingsStore.update({ autoLoom: !settingsStore.current.autoLoom })}
+			title="Auto-loom: split on likely alternatives (cooldown {settingsStore.current.autoLoomCooldown} tokens, threshold {settingsStore.current.autoLoomThreshold}%)"
+		>
+			<!-- Branching/fork icon -->
+			<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<circle cx="12" cy="18" r="3" />
+				<circle cx="6" cy="6" r="3" />
+				<circle cx="18" cy="6" r="3" />
+				<path d="M12 15V12c0-1.66 1.34-3 3-3h.08" />
+				<path d="M12 12c0-1.66-1.34-3-3-3H8.92" />
+			</svg>
+		</button>
+
 		<!-- Generate All Leaves -->
 		<button
 			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors disabled:opacity-40 disabled:pointer-events-none"

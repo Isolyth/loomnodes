@@ -22,7 +22,7 @@ function createGenerationStore() {
 	let isBulkGenerating = $state(false);
 
 	async function runBatchGeneration(
-		entries: { parentId: string; prompt: string; count: number }[],
+		entries: { parentId: string; prompt: string; count: number; generatedTextStart?: number; cooldownStart?: number }[],
 		settings: typeof settingsStore.current
 	): Promise<void> {
 		const requests: BatchStreamRequest[] = [];
@@ -31,13 +31,18 @@ function createGenerationStore() {
 		const rafScheduled = new Map<string, boolean>();
 		const completed = new Set<string>();
 		const logprobBuffers = new Map<string, TokenLogprob[]>();
+		// Auto-loom tracking
+		const parentIds = new Map<string, string>();
+		const genStarts = new Map<string, number>();
+		const tokenCounters = new Map<string, number>();
 
 		for (const entry of entries) {
 			for (let i = 0; i < entry.count; i++) {
+				const genStart = entry.generatedTextStart ?? entry.prompt.length;
 				const childId = graphStore.addChildStreaming(
 					entry.parentId,
 					entry.prompt,
-					entry.prompt.length
+					genStart
 				);
 				if (childId) {
 					requests.push({ id: childId, prompt: entry.prompt });
@@ -45,6 +50,9 @@ function createGenerationStore() {
 					prompts.set(childId, entry.prompt);
 					rafScheduled.set(childId, false);
 					logprobBuffers.set(childId, []);
+					parentIds.set(childId, entry.parentId);
+					genStarts.set(childId, genStart);
+					tokenCounters.set(childId, entry.cooldownStart ?? 0);
 				}
 			}
 		}
@@ -97,7 +105,8 @@ function createGenerationStore() {
 				onToken(id: string, token: string, logprobData?: TokenLogprobData) {
 					const buf = buffers.get(id);
 					if (buf == null) return;
-					buffers.set(id, buf + token);
+					const newBuf = buf + token;
+					buffers.set(id, newBuf);
 					// Accumulate logprob data for this token
 					if (logprobData) {
 						const lpBuf = logprobBuffers.get(id);
@@ -109,6 +118,42 @@ function createGenerationStore() {
 							});
 						}
 					}
+
+					// Auto-loom: cooldown primes, then next uncertain token triggers
+					// Read autoLoom live from settingsStore so toggling it off takes effect immediately
+					if (settingsStore.current.autoLoom && logprobData?.topLogprobs) {
+						const count = (tokenCounters.get(id) ?? 0) + 1;
+						tokenCounters.set(id, count);
+						const primed = count >= settings.autoLoomCooldown;
+
+						if (primed) {
+							const threshold = settings.autoLoomThreshold / 100;
+							const genStart = genStarts.get(id)!;
+
+							const branches: { parentId: string; prompt: string; count: number; generatedTextStart: number }[] = [];
+							for (const [altToken, altLogprob] of Object.entries(logprobData.topLogprobs)) {
+								if (altToken === token) continue;
+								const altProb = Math.exp(altLogprob);
+								if (altProb >= threshold) {
+									// Branch is a child of THIS node, with text up to this point + alt token
+									branches.push({
+										parentId: id,
+										prompt: buf + altToken,
+										count: 1,
+										generatedTextStart: newBuf.length
+									});
+								}
+							}
+
+							if (branches.length > 0) {
+								// Reset cooldown only when we actually branch
+								tokenCounters.set(id, 0);
+								// Fire-and-forget branch generations
+								runBatchGeneration(branches, settings).catch(() => {});
+							}
+						}
+					}
+
 					if (!rafScheduled.get(id)) {
 						rafScheduled.set(id, true);
 						requestAnimationFrame(() => {
