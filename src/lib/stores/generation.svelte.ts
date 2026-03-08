@@ -5,7 +5,8 @@ import {
 	fetchCompletionStreamBatch,
 	CompletionServiceError
 } from '$lib/services/completion.js';
-import type { BatchStreamRequest } from '$lib/services/completion.js';
+import type { BatchStreamRequest, TokenLogprobData } from '$lib/services/completion.js';
+import type { TokenLogprob } from '$lib/types/node.js';
 
 function shuffle<T>(arr: T[]): T[] {
 	const a = [...arr];
@@ -29,6 +30,7 @@ function createGenerationStore() {
 		const prompts = new Map<string, string>();
 		const rafScheduled = new Map<string, boolean>();
 		const completed = new Set<string>();
+		const logprobBuffers = new Map<string, TokenLogprob[]>();
 
 		for (const entry of entries) {
 			for (let i = 0; i < entry.count; i++) {
@@ -42,6 +44,7 @@ function createGenerationStore() {
 					buffers.set(childId, entry.prompt);
 					prompts.set(childId, entry.prompt);
 					rafScheduled.set(childId, false);
+					logprobBuffers.set(childId, []);
 				}
 			}
 		}
@@ -75,6 +78,11 @@ function createGenerationStore() {
 			if (buf != null) {
 				graphStore.updateTextSilent(id, buf);
 			}
+			// Store accumulated logprobs
+			const lps = logprobBuffers.get(id);
+			if (lps && lps.length > 0) {
+				graphStore.setLogprobs(id, lps);
+			}
 			graphStore.setGenerating(id, false);
 			activeRequests--;
 
@@ -86,10 +94,21 @@ function createGenerationStore() {
 
 		try {
 			await fetchCompletionStreamBatch(requests, settings, {
-				onToken(id: string, token: string) {
+				onToken(id: string, token: string, logprobData?: TokenLogprobData) {
 					const buf = buffers.get(id);
 					if (buf == null) return;
 					buffers.set(id, buf + token);
+					// Accumulate logprob data for this token
+					if (logprobData) {
+						const lpBuf = logprobBuffers.get(id);
+						if (lpBuf) {
+							lpBuf.push({
+								token,
+								logprob: logprobData.logprob,
+								topLogprobs: logprobData.topLogprobs
+							});
+						}
+					}
 					if (!rafScheduled.get(id)) {
 						rafScheduled.set(id, true);
 						requestAnimationFrame(() => {

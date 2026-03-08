@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@xyflow/svelte';
-import type { LoomNodeData } from '$lib/types/node.js';
+import type { LoomNodeData, TokenLogprob } from '$lib/types/node.js';
 import { createId } from '$lib/utils/id.js';
 import { saveGraph, loadGraph } from '$lib/utils/persistence.js';
 
@@ -252,6 +252,10 @@ function createGraphStore() {
 		patchNode(nodeId, { error });
 	}
 
+	function setLogprobs(nodeId: string, logprobs: TokenLogprob[]) {
+		patchNode(nodeId, { logprobs });
+	}
+
 	/** Update positions without persisting — used by the live simulation on each tick. */
 	function updatePositionsSilent(positions: Map<string, { x: number; y: number }>) {
 		nodes = nodes.map((n) => {
@@ -320,6 +324,7 @@ function createGraphStore() {
 		updateTextSilent,
 		setGenerating,
 		setError,
+		setLogprobs,
 		updatePositionsSilent,
 		persist,
 		getPrompt,

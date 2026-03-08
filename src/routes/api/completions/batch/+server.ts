@@ -1,5 +1,55 @@
 import type { RequestHandler } from './$types';
 
+function extractLogprob(data: Record<string, unknown>, choice: Record<string, unknown> | undefined): { logprob: number; topLogprobs?: Record<string, number> } | null {
+	// Format 1: OpenAI legacy completions — choice.logprobs.token_logprobs[0]
+	const lp = (choice as any)?.logprobs;
+	if (lp?.token_logprobs?.[0] != null) {
+		const result: { logprob: number; topLogprobs?: Record<string, number> } = {
+			logprob: lp.token_logprobs[0]
+		};
+		if (lp.top_logprobs?.[0]) {
+			result.topLogprobs = lp.top_logprobs[0];
+		}
+		return result;
+	}
+
+	// Format 2: OpenAI chat-style (used by llama.cpp /v1/completions) — choice.logprobs.content[0]
+	if (lp?.content?.[0]?.logprob != null) {
+		const entry = lp.content[0];
+		const result: { logprob: number; topLogprobs?: Record<string, number> } = {
+			logprob: entry.logprob
+		};
+		if (Array.isArray(entry.top_logprobs) && entry.top_logprobs.length > 0) {
+			result.topLogprobs = {};
+			for (const alt of entry.top_logprobs) {
+				if (alt.token != null && alt.logprob != null) {
+					result.topLogprobs[alt.token] = alt.logprob;
+				}
+			}
+		}
+		return result;
+	}
+
+	// Format 3: llama.cpp native — top-level completion_probabilities
+	const cpEntry = (data as any).completion_probabilities?.[0];
+	if (cpEntry?.logprob != null) {
+		const result: { logprob: number; topLogprobs?: Record<string, number> } = {
+			logprob: cpEntry.logprob
+		};
+		if (Array.isArray(cpEntry.top_logprobs) && cpEntry.top_logprobs.length > 0) {
+			result.topLogprobs = {};
+			for (const alt of cpEntry.top_logprobs) {
+				if (alt.token != null && alt.logprob != null) {
+					result.topLogprobs[alt.token] = alt.logprob;
+				}
+			}
+		}
+		return result;
+	}
+
+	return null;
+}
+
 export const POST: RequestHandler = async ({ request }) => {
 	const { requests, apiBaseUrl, apiKey, maxParallel = 10, ...sharedBody } = await request.json();
 
@@ -15,7 +65,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const stream = new ReadableStream({
 		async start(controller) {
-			function send(event: { id: string; type: string; text?: string }) {
+			function send(event: { id: string; type: string; text?: string; logprob?: number; topLogprobs?: Record<string, number> }) {
 				controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
 			}
 
@@ -24,7 +74,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					const response = await fetch(url, {
 						method: 'POST',
 						headers,
-						body: JSON.stringify({ ...sharedBody, prompt: req.prompt, stream: true })
+						body: JSON.stringify({ ...sharedBody, prompt: req.prompt, stream: true, logprobs: 5, n_probs: 5 })
 					});
 
 					if (!response.ok || !response.body) {
@@ -63,11 +113,18 @@ export const POST: RequestHandler = async ({ request }) => {
 							if (trimmed.startsWith('data: ')) {
 								try {
 									const data = JSON.parse(trimmed.slice(6));
+									const choice = data.choices?.[0];
 									const text =
-										data.choices?.[0]?.text ??
+										choice?.text ??
 										(typeof data.content === 'string' ? data.content : null);
 									if (text != null) {
-										send({ id: req.id, type: 'token', text });
+										const evt: { id: string; type: string; text: string; logprob?: number; topLogprobs?: Record<string, number> } = { id: req.id, type: 'token', text };
+										const lpData = extractLogprob(data, choice);
+										if (lpData) {
+											evt.logprob = lpData.logprob;
+											if (lpData.topLogprobs) evt.topLogprobs = lpData.topLogprobs;
+										}
+										send(evt);
 									}
 								} catch {
 									// skip malformed JSON
@@ -82,11 +139,18 @@ export const POST: RequestHandler = async ({ request }) => {
 						if (trimmed.startsWith('data: ') && trimmed !== 'data: [DONE]') {
 							try {
 								const data = JSON.parse(trimmed.slice(6));
+								const choice = data.choices?.[0];
 								const text =
-									data.choices?.[0]?.text ??
+									choice?.text ??
 									(typeof data.content === 'string' ? data.content : null);
 								if (text != null) {
-									send({ id: req.id, type: 'token', text });
+									const evt: { id: string; type: string; text: string; logprob?: number; topLogprobs?: Record<string, number> } = { id: req.id, type: 'token', text };
+									const lpData = extractLogprob(data, choice);
+									if (lpData) {
+										evt.logprob = lpData.logprob;
+										if (lpData.topLogprobs) evt.topLogprobs = lpData.topLogprobs;
+									}
+									send(evt);
 								}
 							} catch {
 								// skip

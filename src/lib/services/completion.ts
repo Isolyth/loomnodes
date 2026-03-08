@@ -194,8 +194,13 @@ export interface BatchStreamRequest {
 	prompt: string;
 }
 
+export interface TokenLogprobData {
+	logprob: number;
+	topLogprobs?: Record<string, number>;
+}
+
 export interface BatchStreamCallbacks {
-	onToken: (id: string, token: string) => void;
+	onToken: (id: string, token: string, logprobData?: TokenLogprobData) => void;
 	onDone: (id: string) => void;
 	onError: (id: string, error: Error) => void;
 }
@@ -270,9 +275,13 @@ export async function fetchCompletionStreamBatch(
 					try {
 						const event = JSON.parse(trimmed.slice(6));
 						switch (event.type) {
-							case 'token':
-								callbacks.onToken(event.id, event.text);
+							case 'token': {
+								const lpData = event.logprob != null
+									? { logprob: event.logprob, topLogprobs: event.topLogprobs }
+									: undefined;
+								callbacks.onToken(event.id, event.text, lpData);
 								break;
+							}
 							case 'done':
 								callbacks.onDone(event.id);
 								break;

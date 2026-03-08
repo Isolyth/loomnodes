@@ -23,6 +23,18 @@
 	let highlightEl: HTMLDivElement;
 
 	let hasHighlight = $derived(data.generatedTextStart > 0 && data.generatedTextStart < data.text.length);
+	let hasLogprobs = $derived(!data.isGenerating && data.logprobs && data.logprobs.length > 0);
+	let showLogprobs = $state(false);
+
+	function logprobToColor(logprob: number): string {
+		// logprob 0 = 100% confident (bright green), -5+ = very uncertain (red)
+		const p = Math.exp(logprob); // convert to probability [0,1]
+		if (p >= 0.9) return 'rgba(74, 222, 128, 0.25)';   // green
+		if (p >= 0.7) return 'rgba(163, 230, 53, 0.25)';    // lime
+		if (p >= 0.5) return 'rgba(250, 204, 21, 0.25)';    // yellow
+		if (p >= 0.3) return 'rgba(251, 146, 60, 0.25)';    // orange
+		return 'rgba(248, 113, 113, 0.25)';                  // red
+	}
 
 	function handleGenerate() {
 		errorMessage = null;
@@ -110,34 +122,62 @@
 			</div>
 		{/if}
 		<div class="p-3">
-			{#if data.isRoot}
-				<div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
-					Root
-				</div>
-			{/if}
+			<div class="flex items-center justify-between mb-1.5">
+				{#if data.isRoot}
+					<div class="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">
+						Root
+					</div>
+				{:else}
+					<div></div>
+				{/if}
+				{#if hasLogprobs}
+					<button
+						class="text-[10px] px-1.5 py-0.5 rounded transition-colors"
+						class:bg-zinc-700={!showLogprobs}
+						class:text-zinc-400={!showLogprobs}
+						class:bg-indigo-600={showLogprobs}
+						class:text-indigo-100={showLogprobs}
+						onclick={() => showLogprobs = !showLogprobs}
+						title="Toggle logprobs view"
+					>lp</button>
+				{/if}
+			</div>
 
 			<div class="relative">
-				{#if hasHighlight}
+				{#if showLogprobs && hasLogprobs && data.logprobs}
+					<!-- Logprobs view: tokens with hover tooltips -->
 					<div
-						bind:this={highlightEl}
-						class="absolute inset-0 rounded p-2 font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
-						style="color: transparent; font-size: {fontSize}px; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
-						aria-hidden="true"
-					><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
-				{/if}
+						class="w-full rounded p-2 bg-zinc-800 font-mono overflow-y-auto text-zinc-100"
+						style="font-size: {fontSize}px; line-height: 1.5; height: {textareaRows * fontSize * 1.5 + 16}px;"
+					><span class="text-zinc-400">{data.text.slice(0, data.generatedTextStart)}</span>{#each data.logprobs as lp}<span
+							class="relative cursor-default rounded-sm hover:ring-1 hover:ring-indigo-400 group"
+							style="background: {logprobToColor(lp.logprob)};"
+						>{lp.token}<span
+								class="pointer-events-none invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-50 min-w-[140px] max-w-[200px] rounded bg-zinc-950 border border-zinc-600 p-2 text-[10px] shadow-xl"
+							><div class="font-semibold text-zinc-200 mb-1">{lp.logprob.toFixed(3)} ({(Math.exp(lp.logprob) * 100).toFixed(1)}%)</div>{#if lp.topLogprobs}{#each Object.entries(lp.topLogprobs).sort((a, b) => b[1] - a[1]).slice(0, 5) as [tok, prob]}<div class="flex justify-between gap-2 text-zinc-400"><span class="truncate text-zinc-300" title={JSON.stringify(tok)}>{tok.replace(/\n/g, '\\n')}</span><span>{(Math.exp(prob) * 100).toFixed(1)}%</span></div>{/each}{/if}</span></span>{/each}</div>
+				{:else}
+					{#if hasHighlight}
+						<div
+							bind:this={highlightEl}
+							class="absolute inset-0 rounded p-2 font-mono whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
+							style="color: transparent; font-size: {fontSize}px; line-height: 1.5; word-spacing: normal; letter-spacing: normal;"
+							aria-hidden="true"
+						><span>{data.text.slice(0, data.generatedTextStart)}</span><mark class="rounded" style="color: transparent; background: rgba(99, 102, 241, 0.15);">{data.text.slice(data.generatedTextStart)}</mark></div>
+					{/if}
 
-				<textarea
-					bind:this={textareaEl}
-					class="relative w-full resize-none rounded p-2 text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-					class:bg-zinc-800={!hasHighlight}
-					class:bg-transparent={hasHighlight}
-					style="font-size: {fontSize}px; line-height: 1.5;"
-					rows={textareaRows}
-					placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
-					value={data.text}
-					oninput={handleTextInput}
-					onscroll={syncScroll}
-				></textarea>
+					<textarea
+						bind:this={textareaEl}
+						class="relative w-full resize-none rounded p-2 text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+						class:bg-zinc-800={!hasHighlight}
+						class:bg-transparent={hasHighlight}
+						style="font-size: {fontSize}px; line-height: 1.5;"
+						rows={textareaRows}
+						placeholder={data.isRoot ? 'Enter your prompt...' : 'Generated text...'}
+						value={data.text}
+						oninput={handleTextInput}
+						onscroll={syncScroll}
+					></textarea>
+				{/if}
 			</div>
 
 			{#if errorMessage}
