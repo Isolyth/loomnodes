@@ -268,8 +268,27 @@ function createGraphStore() {
 		return nodeDataMap.get(nodeId)?.text ?? '';
 	}
 
+	function exportPretty(): string {
+		const dataMap = new Map(nodes.map((n) => [n.id, n.data]));
+		function buildTree(id: string): { text: string; children?: ReturnType<typeof buildTree>[] } {
+			const d = dataMap.get(id)!;
+			const node: { text: string; children?: ReturnType<typeof buildTree>[] } = { text: d.text };
+			if (d.childIds.length > 0) {
+				node.children = d.childIds.map(buildTree);
+			}
+			return node;
+		}
+		const root = nodes.find((n) => n.data.isRoot);
+		if (!root) return '{}';
+		return JSON.stringify(buildTree(root.id), null, 2);
+	}
+
 	function exportGraph(): string {
-		return JSON.stringify({ nodes, edges }, null, 2);
+		const stripped = nodes.map((n) => {
+			const { logprobs, ...data } = n.data;
+			return { ...n, data };
+		});
+		return JSON.stringify({ nodes: stripped, edges }, null, 2);
 	}
 
 	function importGraph(json: string): void {
@@ -328,6 +347,7 @@ function createGraphStore() {
 		updatePositionsSilent,
 		persist,
 		getPrompt,
+		exportPretty,
 		exportGraph,
 		importGraph,
 		clearAll

@@ -73,6 +73,17 @@
 		URL.revokeObjectURL(url);
 	}
 
+	function handleExportPretty() {
+		const json = graphStore.exportPretty();
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `loomnodes-tree-${new Date().toISOString().slice(0, 10)}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
 	let fileInput: HTMLInputElement;
 
 	function handleImport() {
@@ -144,12 +155,25 @@
 		<button
 			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
 			onclick={handleExport}
-			title="Export graph"
+			title="Export graph (reimportable)"
 		>
 			<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 				<polyline points="17 8 12 3 7 8" />
 				<line x1="12" y1="3" x2="12" y2="15" />
+			</svg>
+		</button>
+
+		<!-- Pretty Export -->
+		<button
+			class="rounded-lg bg-zinc-800 border border-zinc-700 p-2.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 shadow-lg transition-colors"
+			onclick={handleExportPretty}
+			title="Export as readable tree (text only)"
+		>
+			<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M4 7h16" />
+				<path d="M8 12h12" />
+				<path d="M12 17h8" />
 			</svg>
 		</button>
 
